@@ -1,0 +1,1548 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pneumonia Detection</title>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <!-- Add Font Awesome CDN for icons -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css" rel="stylesheet">
+    <style>
+        body {
+            margin: 0;
+            font-family: 'Roboto', sans-serif;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            color: #333;
+        }
+
+        .video-background {
+            position: fixed;
+            right: 0;
+            bottom: 0;
+            min-width: 100%;
+            min-height: 100%;
+            width: auto;
+            height: auto;
+            z-index: -1;
+            filter: brightness(0.7);
+        }
+
+        .content-wrapper {
+            position: relative;
+            z-index: 1;
+            background: rgba(28, 28, 45, 0.85);
+            backdrop-filter: blur(10px);
+            padding: 2rem;
+            border-radius: 20px;
+            margin: 2rem auto;
+            max-width: 800px;
+            width: 90%;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+            color: #fff;
+        }
+
+        h1 {
+            text-align: center;
+            font-size: 2.5rem;
+            margin-bottom: 2rem;
+            color: #fff;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.2);
+        }
+
+        .container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 1.5rem;
+        }
+
+        form {
+            width: 100%;
+            max-width: 500px;
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+            align-items: center;
+        }
+
+        label {
+            font-size: 1.2rem;
+            margin-bottom: 0.5rem;
+            color: #fff;
+        }
+
+        input[type="file"] {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 1rem;
+            border-radius: 10px;
+            width: 100%;
+            border: 2px dashed rgba(255, 255, 255, 0.3);
+            cursor: pointer;
+            color: #fff;
+        }
+
+        button {
+            background: linear-gradient(135deg, #00a8ff, #0097e6);
+            color: white;
+            padding: 1rem 2rem;
+            border: none;
+            border-radius: 10px;
+            font-size: 1.1rem;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+            width: auto;
+            min-width: 200px;
+        }
+
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0, 168, 255, 0.3);
+        }
+
+        .result {
+            text-align: center;
+            padding: 2rem;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 15px;
+            width: 100%;
+            max-width: 500px;
+        }
+
+        .result-details {
+            background: rgba(255, 255, 255, 0.05);
+            padding: 1.5rem;
+            border-radius: 10px;
+            margin: 1.5rem 0;
+            text-align: left;
+        }
+
+        .result-details h3 {
+            color: #00a8ff;
+            margin-bottom: 1rem;
+            font-size: 1.3rem;
+        }
+
+        .detail-item {
+            margin: 0.8rem 0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .detail-label {
+            color: #888;
+            font-size: 0.9rem;
+        }
+
+        .detail-value {
+            color: #fff;
+            font-weight: bold;
+        }
+
+        .download-section {
+            margin-top: 2rem;
+            padding-top: 1.5rem;
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .btn-group {
+            display: flex;
+            gap: 1rem;
+            justify-content: center;
+        }
+
+        .btn-download {
+            background: linear-gradient(135deg, #2ecc71, #27ae60);
+            padding: 0.8rem 1.5rem;
+            border-radius: 8px;
+            color: white;
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-size: 1rem;
+            transition: all 0.3s ease;
+        }
+
+        .btn-download:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(46, 204, 113, 0.3);
+        }
+
+        .btn-download i {
+            font-size: 1.1rem;
+        }
+
+        .confidence-bar {
+            width: 100%;
+            height: 6px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 3px;
+            margin-top: 0.5rem;
+            overflow: hidden;
+        }
+
+        .confidence-level {
+            height: 100%;
+            background: linear-gradient(90deg, #00a8ff, #0097e6);
+            width: {{ confidence }}%;
+            transition: width 0.5s ease;
+        }
+
+        .result img {
+            border-radius: 10px;
+            margin: 1rem 0;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+            max-width: 100%;
+            height: auto;
+        }
+
+        .result p {
+            font-size: 1.2rem;
+            margin: 1rem 0;
+        }
+
+        footer {
+            margin-top: auto;
+            padding: 1rem;
+            text-align: center;
+            color: #fff;
+            background: rgba(28, 28, 45, 0.85);
+            backdrop-filter: blur(5px);
+            width: 100%;
+        }
+
+        .fas {
+            margin-right: 0.5rem;
+            font-size: 1.2rem;
+        }
+
+        /* Custom styling for success and error messages */
+        .result p .fa-check-circle {
+            color: #2ecc71;
+        }
+
+        .result p .fa-exclamation-triangle {
+            color: #ff6b6b;
+        }
+
+        .confidence-section {
+            margin: 1.5rem 0;
+            padding: 1rem;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 10px;
+        }
+
+        .confidence-details {
+            margin-top: 1.5rem;
+            padding: 1rem;
+            background: rgba(0, 168, 255, 0.1);
+            border-radius: 8px;
+        }
+
+        .confidence-details h4 {
+            color: #00a8ff;
+            margin-bottom: 1rem;
+            font-size: 1.1rem;
+        }
+
+        .confidence-factors {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+            margin-bottom: 1rem;
+        }
+
+        .factor-item {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.5rem;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 6px;
+        }
+
+        .factor-item i {
+            color: #2ecc71;
+        }
+
+        .confidence-explanation {
+            font-size: 0.9rem;
+            line-height: 1.6;
+        }
+
+        .confidence-explanation ul {
+            margin: 0.5rem 0;
+            padding-left: 1.5rem;
+        }
+
+        .confidence-explanation li {
+            margin: 0.3rem 0;
+        }
+
+        .confidence-note {
+            margin-top: 1rem;
+            padding: 0.5rem;
+            background: rgba(46, 204, 113, 0.1);
+            border-radius: 6px;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .confidence-note i {
+            color: #2ecc71;
+        }
+
+        /* Loading Animation */
+        .loading-container {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.8);
+            z-index: 1000;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .loading-spinner {
+            width: 50px;
+            height: 50px;
+            border: 5px solid #f3f3f3;
+            border-top: 5px solid #00a8ff;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .loading-text {
+            color: white;
+            margin-top: 20px;
+            font-size: 1.2rem;
+        }
+
+        /* Enhanced Result Card */
+        .result {
+            animation: fadeIn 0.5s ease-in;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* Stats Cards */
+        .stats-container {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+            margin: 1.5rem 0;
+        }
+
+        .stat-card {
+            background: rgba(255, 255, 255, 0.05);
+            padding: 1rem;
+            border-radius: 10px;
+            text-align: center;
+            transition: transform 0.3s ease;
+        }
+
+        .stat-card:hover {
+            transform: translateY(-5px);
+        }
+
+        .stat-value {
+            font-size: 2rem;
+            font-weight: bold;
+            color: #00a8ff;
+            margin: 0.5rem 0;
+        }
+
+        .stat-label {
+            color: #888;
+            font-size: 0.9rem;
+        }
+
+        /* Enhanced Form */
+        .upload-area {
+            border: 2px dashed rgba(255, 255, 255, 0.3);
+            padding: 2rem;
+            border-radius: 15px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .upload-area:hover {
+            border-color: #00a8ff;
+            background: rgba(0, 168, 255, 0.1);
+        }
+
+        .upload-icon {
+            font-size: 3rem;
+            color: #00a8ff;
+            margin-bottom: 1rem;
+        }
+
+        /* Enhanced Footer */
+        footer {
+            background: linear-gradient(to right, rgba(28, 28, 45, 0.95), rgba(28, 28, 45, 0.85));
+            padding: 1.5rem;
+            text-align: center;
+        }
+
+        .footer-content {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .footer-links {
+            display: flex;
+            gap: 2rem;
+        }
+
+        .footer-links a {
+            color: #fff;
+            text-decoration: none;
+            transition: color 0.3s ease;
+        }
+
+        .footer-links a:hover {
+            color: #00a8ff;
+        }
+
+        /* Tooltip */
+        .tooltip {
+            position: relative;
+            display: inline-block;
+        }
+
+        .tooltip .tooltip-text {
+            visibility: hidden;
+            background-color: rgba(0, 0, 0, 0.8);
+            color: #fff;
+            text-align: center;
+            padding: 5px 10px;
+            border-radius: 6px;
+            position: absolute;
+            z-index: 1;
+            bottom: 125%;
+            left: 50%;
+            transform: translateX(-50%);
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+
+        .tooltip:hover .tooltip-text {
+            visibility: visible;
+            opacity: 1;
+        }
+
+        /* Theme Variables */
+        :root {
+            --primary-color: #00a8ff;
+            --secondary-color: #0097e6;
+            --background-color: rgba(28, 28, 45, 0.85);
+            --text-color: #fff;
+            --card-bg: rgba(255, 255, 255, 0.1);
+            --border-color: rgba(255, 255, 255, 0.3);
+            --hover-color: rgba(0, 168, 255, 0.1);
+        }
+
+        [data-theme="light"] {
+            --primary-color: #2c3e50;
+            --secondary-color: #34495e;
+            --background-color: rgba(255, 255, 255, 0.95);
+            --text-color: #333;
+            --card-bg: rgba(0, 0, 0, 0.05);
+            --border-color: rgba(0, 0, 0, 0.2);
+            --hover-color: rgba(44, 62, 80, 0.1);
+        }
+
+        /* Theme Toggle Button */
+        .theme-toggle {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: var(--primary-color);
+            border: none;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 1.2rem;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+            z-index: 1000;
+            transition: all 0.3s ease;
+        }
+
+        .theme-toggle:hover {
+            transform: scale(1.1);
+        }
+
+        /* History Section */
+        .history-section {
+            margin-top: 2rem;
+            padding: 1rem;
+            background: var(--card-bg);
+            border-radius: 10px;
+            width: 100%;
+            max-width: 800px;
+        }
+
+        .history-title {
+            color: var(--primary-color);
+            margin-bottom: 1rem;
+            font-size: 1.3rem;
+        }
+
+        .history-list {
+            list-style: none;
+            padding: 0;
+        }
+
+        .history-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 1rem;
+            background: var(--card-bg);
+            border-radius: 8px;
+            margin-bottom: 0.5rem;
+            transition: transform 0.3s ease;
+        }
+
+        .history-item:hover {
+            transform: translateX(5px);
+        }
+
+        /* FAQ Section */
+        .faq-section {
+            margin-top: 2rem;
+            padding: 1rem;
+            background: var(--card-bg);
+            border-radius: 10px;
+            width: 100%;
+            max-width: 800px;
+        }
+
+        .faq-title {
+            color: var(--primary-color);
+            margin-bottom: 1rem;
+            font-size: 1.3rem;
+        }
+
+        .faq-item {
+            margin-bottom: 1rem;
+            background: var(--card-bg);
+            border-radius: 8px;
+            overflow: hidden;
+        }
+
+        .faq-question {
+            padding: 1rem;
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            color: var(--text-color);
+        }
+
+        .faq-answer {
+            padding: 0 1rem 1rem;
+            color: var(--text-color);
+            display: none;
+        }
+
+        .faq-item.active .faq-answer {
+            display: block;
+        }
+
+        /* Feedback Section */
+        .feedback-section {
+            margin-top: 2rem;
+            padding: 1rem;
+            background: var(--card-bg);
+            border-radius: 10px;
+            width: 100%;
+            max-width: 800px;
+        }
+
+        .feedback-form {
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+        }
+
+        .feedback-input {
+            padding: 0.8rem;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            background: var(--card-bg);
+            color: var(--text-color);
+        }
+
+        .feedback-textarea {
+            min-height: 100px;
+            resize: vertical;
+        }
+
+        /* Mobile Responsive Design */
+        @media (max-width: 768px) {
+            .content-wrapper {
+                margin: 1rem;
+                padding: 1rem;
+            }
+
+            .stats-container {
+                grid-template-columns: 1fr;
+            }
+
+            .footer-content {
+                flex-direction: column;
+                gap: 1rem;
+            }
+
+            .footer-links {
+                flex-wrap: wrap;
+                justify-content: center;
+            }
+        }
+
+        /* Mode Selector */
+        .mode-selector {
+            position: fixed;
+            top: 20px;
+            left: 20px;
+            z-index: 1000;
+            display: flex;
+            gap: 1rem;
+        }
+
+        .mode-btn {
+            background: var(--primary-color);
+            border: none;
+            border-radius: 20px;
+            padding: 0.5rem 1rem;
+            color: white;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            transition: all 0.3s ease;
+        }
+
+        .mode-btn.active {
+            background: var(--secondary-color);
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+        }
+
+        /* Medical Professional Features */
+        .medical-features {
+            display: none;
+            margin-top: 2rem;
+            padding: 1rem;
+            background: var(--card-bg);
+            border-radius: 10px;
+            width: 100%;
+            max-width: 800px;
+        }
+
+        .medical-features.active {
+            display: block;
+        }
+
+        .annotation-tools {
+            display: flex;
+            gap: 1rem;
+            margin-bottom: 1rem;
+            flex-wrap: wrap;
+            background: rgba(255, 255, 255, 0.05);
+            padding: 1rem;
+            border-radius: 8px;
+        }
+
+        .annotation-btn {
+            background: var(--primary-color);
+            border: none;
+            border-radius: 5px;
+            padding: 0.5rem 1rem;
+            color: white;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            transition: all 0.3s ease;
+        }
+
+        .annotation-btn:hover {
+            background: var(--secondary-color);
+            transform: translateY(-2px);
+        }
+
+        .annotation-btn.active {
+            background: var(--secondary-color);
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+        }
+
+        .image-container {
+            position: relative;
+            display: inline-block;
+            margin: 1rem 0;
+            background: rgba(0, 0, 0, 0.2);
+            border-radius: 10px;
+            overflow: hidden;
+        }
+
+        .annotated-image {
+            max-width: 100%;
+            height: auto;
+            border-radius: 10px;
+            display: block;
+        }
+
+        .annotation-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+        }
+
+        .annotation {
+            position: absolute;
+            background: rgba(255, 0, 0, 0.3);
+            border: 2px solid red;
+            pointer-events: none;
+        }
+
+        .measurement {
+            position: absolute;
+            background: rgba(0, 255, 0, 0.3);
+            border: 2px solid green;
+            pointer-events: none;
+        }
+
+        .measurement-label {
+            position: absolute;
+            background: rgba(0, 0, 0, 0.8);
+            color: white;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-size: 12px;
+            pointer-events: none;
+            transform: translate(-50%, -50%);
+        }
+
+        .compare-container {
+            display: flex;
+            gap: 1rem;
+            margin-top: 1rem;
+            flex-wrap: wrap;
+        }
+
+        .compare-image {
+            max-width: 100%;
+            height: auto;
+            border-radius: 10px;
+            flex: 1;
+            min-width: 300px;
+        }
+
+        .medical-notes {
+            margin-top: 1rem;
+            padding: 1rem;
+            background: var(--card-bg);
+            border-radius: 8px;
+        }
+
+        .notes-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1rem;
+        }
+
+        .notes-list {
+            list-style: none;
+            padding: 0;
+        }
+
+        .note-item {
+            padding: 0.5rem;
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .note-item:last-child {
+            border-bottom: none;
+        }
+
+        .delete-note {
+            background: none;
+            border: none;
+            color: #ff6b6b;
+            cursor: pointer;
+            padding: 0.2rem;
+            transition: color 0.3s ease;
+        }
+
+        .delete-note:hover {
+            color: #ff0000;
+        }
+
+        .medical-notes textarea {
+            width: 100%;
+            min-height: 100px;
+            padding: 0.8rem;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            background: var(--card-bg);
+            color: var(--text-color);
+            margin-bottom: 1rem;
+            resize: vertical;
+        }
+
+        /* Patient Information Display */
+        .patient-info-display {
+            background: rgba(255, 255, 255, 0.05);
+            padding: 1.5rem;
+            border-radius: 10px;
+            margin: 1.5rem 0;
+            text-align: left;
+        }
+
+        .patient-info-display h3 {
+            color: #00a8ff;
+            margin-bottom: 1rem;
+            font-size: 1.3rem;
+        }
+
+        .patient-details {
+            display: grid;
+            gap: 1rem;
+        }
+
+        .patient-details .detail-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0.5rem;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 5px;
+        }
+
+        .patient-details .detail-label {
+            color: #888;
+            font-size: 0.9rem;
+        }
+
+        .patient-details .detail-value {
+            color: #fff;
+            font-weight: bold;
+        }
+
+        /* Patient Information Form */
+        .patient-form {
+            display: none;
+            margin-top: 2rem;
+            padding: 1rem;
+            background: var(--card-bg);
+            border-radius: 10px;
+            width: 100%;
+            max-width: 800px;
+        }
+
+        .patient-form.active {
+            display: block;
+        }
+
+        .form-group {
+            margin-bottom: 1rem;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 0.5rem;
+            color: var(--text-color);
+        }
+
+        .form-group input,
+        .form-group select,
+        .form-group textarea {
+            width: 100%;
+            padding: 0.8rem;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            background: var(--card-bg);
+            color: var(--text-color);
+        }
+
+        /* Symptoms Checklist */
+        .symptoms-checklist {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+            margin: 1rem 0;
+        }
+
+        .symptom-item {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.5rem;
+            background: var(--card-bg);
+            border-radius: 5px;
+        }
+
+        /* Emergency Warning */
+        .emergency-warning {
+            display: none;
+            background: rgba(255, 0, 0, 0.2);
+            border: 2px solid red;
+            padding: 1rem;
+            border-radius: 10px;
+            margin: 1rem 0;
+            text-align: center;
+        }
+
+        .emergency-warning.active {
+            display: block;
+        }
+
+        .emergency-warning i {
+            color: red;
+            font-size: 2rem;
+            margin-bottom: 0.5rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="mode-selector">
+        <button class="mode-btn active" id="patientMode">
+            <i class="fas fa-user"></i>Patient Mode
+        </button>
+        <button class="mode-btn" id="medicalMode">
+            <i class="fas fa-user-md"></i>Medical Professional Mode
+        </button>
+    </div>
+
+    <button class="theme-toggle" id="themeToggle">
+        <i class="fas fa-moon"></i>
+    </button>
+
+    <div class="loading-container" id="loadingContainer">
+        <div class="loading-spinner"></div>
+        <div class="loading-text">Analyzing X-ray image...</div>
+    </div>
+
+    <video autoplay muted loop id="myVideo" class="video-background">
+        <source src="{{ url_for('static', filename='videos/lungs.mp4') }}" type="video/mp4">
+        Your browser does not support the video tag.
+    </video>
+    
+    <div class="content-wrapper">
+    <h1>Pneumonia Detection</h1>
+    <div class="container">
+            <!-- Combined Patient Information and Upload Form -->
+            <form action="/predict" method="POST" enctype="multipart/form-data" id="uploadForm">
+                <!-- Patient Information Section -->
+                <div class="patient-form active" id="patientForm">
+                    <h3>Patient Information</h3>
+                    <div class="form-group">
+                        <label>Full Name</label>
+                        <input type="text" name="name" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Age</label>
+                        <input type="number" name="age" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Gender</label>
+                        <select name="gender" required>
+                            <option value="">Select Gender</option>
+                            <option value="male">Male</option>
+                            <option value="female">Female</option>
+                            <option value="other">Other</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Medical History</label>
+                        <textarea name="medical_history" rows="3"></textarea>
+                    </div>
+                </div>
+
+                <!-- Upload Section -->
+                <div class="upload-area" onclick="document.getElementById('file').click()">
+                    <i class="fas fa-cloud-upload-alt upload-icon"></i>
+                    <label for="file">Upload Chest X-ray Image</label>
+                    <input type="file" name="file" id="file" required accept="image/*" style="display: none;">
+                </div>
+                <button type="submit" id="uploadBtn">
+                    <i class="fas fa-upload"></i>Upload and Predict
+                </button>
+            </form>
+
+            <!-- Emergency Warning -->
+            <div class="emergency-warning" id="emergencyWarning">
+                <i class="fas fa-exclamation-triangle"></i>
+                <h3>Emergency Warning</h3>
+                <p>If you are experiencing severe symptoms like difficulty breathing, chest pain, or confusion, please seek immediate medical attention.</p>
+            </div>
+
+        {% if result %}
+            <div class="result">
+                {% if result == "Pneumonia Detected" %}
+                        <p><i class="fas fa-exclamation-triangle"></i> {{ result }}</p>
+                {% else %}
+                        <p><i class="fas fa-check-circle"></i> {{ result }}</p>
+                {% endif %}
+                
+                <img src="{{ image_url }}" alt="Uploaded Image" width="300">
+                    
+                    <!-- Patient Information Display -->
+                    {% if show_patient_info and patient_info %}
+                    <div class="patient-info-display">
+                        <h3>Patient Information</h3>
+                        <div class="patient-details">
+                            <div class="detail-item">
+                                <span class="detail-label">Name:</span>
+                                <span class="detail-value">{{ patient_info.name }}</span>
+                            </div>
+                            <div class="detail-item">
+                                <span class="detail-label">Age:</span>
+                                <span class="detail-value">{{ patient_info.age }}</span>
+                            </div>
+                            <div class="detail-item">
+                                <span class="detail-label">Gender:</span>
+                                <span class="detail-value">{{ patient_info.gender }}</span>
+                            </div>
+                            <div class="detail-item">
+                                <span class="detail-label">Medical History:</span>
+                                <span class="detail-value">{{ patient_info.medical_history }}</span>
+                            </div>
+                        </div>
+                    </div>
+                    {% endif %}
+
+                    <div class="stats-container">
+                        <div class="stat-card">
+                            <div class="stat-value">{{ confidence }}%</div>
+                            <div class="stat-label">Overall Confidence</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-value">{{ image_quality }}%</div>
+                            <div class="stat-label">Image Quality</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-value">{{ feature_detection }}%</div>
+                            <div class="stat-label">Feature Detection</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-value">{{ pattern_recognition }}%</div>
+                            <div class="stat-label">Pattern Recognition</div>
+                        </div>
+                    </div>
+
+                    <div class="result-details">
+                        <h3>Analysis Details</h3>
+                        <div class="detail-item">
+                            <span class="detail-label">Diagnosis</span>
+                            <span class="detail-value">{{ result }}</span>
+                        </div>
+                        {% if confidence %}
+                        <div class="confidence-section">
+                            <div class="confidence-details">
+                                <h4>Confidence Score Analysis</h4>
+                                <div class="confidence-factors">
+                                    <div class="factor-item tooltip">
+                                        <i class="fas fa-check-circle"></i>
+                                        <span>Model Accuracy: 95%</span>
+                                        <span class="tooltip-text">Based on extensive training data</span>
+                                    </div>
+                                    <div class="factor-item tooltip">
+                                        <i class="fas fa-check-circle"></i>
+                                        <span>Image Quality Assessment: {{ image_quality }}%</span>
+                                        <span class="tooltip-text">Evaluates image clarity and contrast</span>
+                                    </div>
+                                    <div class="factor-item tooltip">
+                                        <i class="fas fa-check-circle"></i>
+                                        <span>Feature Detection: {{ feature_detection }}%</span>
+                                        <span class="tooltip-text">Identifies key anatomical features</span>
+                                    </div>
+                                    <div class="factor-item tooltip">
+                                        <i class="fas fa-check-circle"></i>
+                                        <span>Pattern Recognition: {{ pattern_recognition }}%</span>
+                                        <span class="tooltip-text">Analyzes texture and patterns</span>
+                                    </div>
+                                </div>
+                                <div class="confidence-explanation">
+                                    <p>The confidence score is calculated based on multiple factors:</p>
+                                    <ul>
+                                        <li>Model's prediction probability</li>
+                                        <li>Image quality and clarity</li>
+                                        <li>Feature detection accuracy</li>
+                                        <li>Pattern recognition reliability</li>
+                                    </ul>
+                                    <p class="confidence-note">
+                                        <i class="fas fa-info-circle"></i>
+                                        A confidence score above 80% indicates high reliability in the diagnosis.
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                        {% endif %}
+                        <div class="detail-item">
+                            <span class="detail-label">Analysis Date</span>
+                            <span class="detail-value">{{ analysis_date }}</span>
+                        </div>
+                    </div>
+
+                    <div class="download-section">
+                        <div class="btn-group">
+                            <a href="{{ url_for('download_report') }}" class="btn-download">
+                                <i class="fas fa-file-pdf"></i>Download Report
+                            </a>
+                        </div>
+                    </div>
+
+                    <!-- Symptoms Checklist -->
+                    <div class="symptoms-checklist">
+                        <h4>Common Pneumonia Symptoms</h4>
+                        <div class="symptom-item">
+                            <input type="checkbox" id="cough">
+                            <label for="cough">Cough</label>
+                        </div>
+                        <div class="symptom-item">
+                            <input type="checkbox" id="fever">
+                            <label for="fever">Fever</label>
+                        </div>
+                        <div class="symptom-item">
+                            <input type="checkbox" id="fatigue">
+                            <label for="fatigue">Fatigue</label>
+                        </div>
+                        <div class="symptom-item">
+                            <input type="checkbox" id="shortness">
+                            <label for="shortness">Shortness of Breath</label>
+                        </div>
+                        <div class="symptom-item">
+                            <input type="checkbox" id="chest">
+                            <label for="chest">Chest Pain</label>
+                        </div>
+                    </div>
+
+                    <!-- Medical Notes Section -->
+                    <div class="medical-notes">
+                        <div class="notes-header">
+                            <h4>Medical Notes</h4>
+                            <button class="annotation-btn" id="addNoteBtn">
+                                <i class="fas fa-plus"></i>Add Note
+                            </button>
+                        </div>
+                        <ul class="notes-list" id="notesList">
+                            <!-- Notes will be added here dynamically -->
+                        </ul>
+                    </div>
+                </div>
+            {% endif %}
+
+            <!-- Medical Professional Features -->
+            <div class="medical-features" id="medicalFeatures">
+                <h3>Medical Professional Tools</h3>
+                <div class="annotation-tools">
+                    <button class="annotation-btn" id="drawBtn">
+                        <i class="fas fa-pencil-alt"></i>Draw
+                    </button>
+                    <button class="annotation-btn" id="measureBtn">
+                        <i class="fas fa-ruler"></i>Measure
+                    </button>
+                    <button class="annotation-btn" id="compareBtn">
+                        <i class="fas fa-images"></i>Compare
+                    </button>
+                </div>
+                <div class="image-container">
+                    <img src="{{ image_url if image_url else '' }}" alt="X-ray Image" class="annotated-image" id="annotatedImage">
+                    <div class="annotation-overlay" id="annotationOverlay"></div>
+                </div>
+                <div class="medical-notes">
+                    <h4>Clinical Notes</h4>
+                    <textarea class="form-group" rows="4" placeholder="Enter clinical observations..."></textarea>
+                </div>
+            </div>
+
+            <!-- History Section -->
+            <div class="history-section">
+                <h3 class="history-title">Analysis History</h3>
+                <ul class="history-list" id="historyList">
+                    <!-- History items will be dynamically added here -->
+                </ul>
+            </div>
+
+            <!-- FAQ Section -->
+            <div class="faq-section">
+                <h3 class="faq-title">Frequently Asked Questions</h3>
+                <div class="faq-item">
+                    <div class="faq-question">
+                        <span>How accurate is the pneumonia detection?</span>
+                        <i class="fas fa-chevron-down"></i>
+                    </div>
+                    <div class="faq-answer">
+                        Our model has been trained on a large dataset of chest X-rays and achieves an accuracy of over 95% in detecting pneumonia. However, it's important to note that this is an AI-assisted tool and should be used in conjunction with professional medical expertise.
+                    </div>
+                </div>
+                <div class="faq-item">
+                    <div class="faq-question">
+                        <span>What types of X-ray images are supported?</span>
+                        <i class="fas fa-chevron-down"></i>
+                    </div>
+                    <div class="faq-answer">
+                        We support standard chest X-ray images in common formats like JPG, PNG, and DICOM. The images should be clear and properly centered on the chest area.
+                    </div>
+                </div>
+                <div class="faq-item">
+                    <div class="faq-question">
+                        <span>How is the confidence score calculated?</span>
+                        <i class="fas fa-chevron-down"></i>
+                    </div>
+                    <div class="faq-answer">
+                        The confidence score is calculated based on multiple factors including model accuracy, image quality assessment, feature detection, and pattern recognition. Each factor contributes to the overall confidence level.
+                    </div>
+                </div>
+            </div>
+
+            <!-- Feedback Section -->
+            <div class="feedback-section">
+                <h3 class="feedback-title">Provide Feedback</h3>
+                <form class="feedback-form" id="feedbackForm">
+                    <input type="text" class="feedback-input" placeholder="Your Name" required>
+                    <input type="email" class="feedback-input" placeholder="Your Email" required>
+                    <textarea class="feedback-input feedback-textarea" placeholder="Your Feedback" required></textarea>
+                    <button type="submit" class="btn-download">
+                        <i class="fas fa-paper-plane"></i>Submit Feedback
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <footer>
+        <div class="footer-content">
+        <p>&copy; 2025 Pneumonia Detection App | Powered by TensorFlow and Flask</p>
+            <div class="footer-links">
+                <a href="#" class="tooltip" id="aboutLink">
+                    <i class="fas fa-info-circle"></i>
+                    <span class="tooltip-text">About the Application</span>
+                </a>
+                <a href="#" class="tooltip" id="howItWorksLink">
+                    <i class="fas fa-question-circle"></i>
+                    <span class="tooltip-text">How it Works</span>
+                </a>
+                <a href="#" class="tooltip" id="contactLink">
+                    <i class="fas fa-envelope"></i>
+                    <span class="tooltip-text">Contact Support</span>
+                </a>
+            </div>
+        </div>
+    </footer>
+
+    <script>
+        // Theme Toggle
+        const themeToggle = document.getElementById('themeToggle');
+        const body = document.body;
+        
+        // Check for saved theme preference
+        const savedTheme = localStorage.getItem('theme');
+        if (savedTheme) {
+            body.setAttribute('data-theme', savedTheme);
+            themeToggle.innerHTML = savedTheme === 'light' ? '<i class="fas fa-moon"></i>' : '<i class="fas fa-sun"></i>';
+        }
+
+        themeToggle.addEventListener('click', () => {
+            const currentTheme = body.getAttribute('data-theme');
+            const newTheme = currentTheme === 'light' ? 'dark' : 'light';
+            
+            body.setAttribute('data-theme', newTheme);
+            localStorage.setItem('theme', newTheme);
+            themeToggle.innerHTML = newTheme === 'light' ? '<i class="fas fa-moon"></i>' : '<i class="fas fa-sun"></i>';
+        });
+
+        // FAQ Toggle
+        document.querySelectorAll('.faq-question').forEach(question => {
+            question.addEventListener('click', () => {
+                const item = question.parentElement;
+                item.classList.toggle('active');
+            });
+        });
+
+        // History Management
+        function addToHistory(result, confidence, date) {
+            const historyList = document.getElementById('historyList');
+            const historyItem = document.createElement('li');
+            historyItem.className = 'history-item';
+            historyItem.innerHTML = `
+                <div>
+                    <strong>${result}</strong>
+                    <br>
+                    <small>Confidence: ${confidence}% | ${date}</small>
+                </div>
+                <i class="fas fa-chevron-right"></i>
+            `;
+            historyList.insertBefore(historyItem, historyList.firstChild);
+        }
+
+        // Add to history when result is shown
+        {% if result %}
+            addToHistory('{{ result }}', {{ confidence }}, '{{ analysis_date }}');
+        {% endif %}
+
+        // Loading Animation
+        document.getElementById('uploadForm').addEventListener('submit', function() {
+            document.getElementById('loadingContainer').style.display = 'flex';
+        });
+
+        // Feedback Form
+        document.getElementById('feedbackForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            // Here you would typically send the feedback to your server
+            alert('Thank you for your feedback!');
+            this.reset();
+        });
+
+        // Footer Links
+        document.getElementById('aboutLink').addEventListener('click', function(e) {
+            e.preventDefault();
+            alert('This application uses advanced AI to detect pneumonia in chest X-ray images. It is designed to assist medical professionals in their diagnostic process.');
+        });
+
+        document.getElementById('howItWorksLink').addEventListener('click', function(e) {
+            e.preventDefault();
+            alert('1. Upload a chest X-ray image\n2. Our AI model analyzes the image\n3. Get detailed results with confidence scores\n4. Download a comprehensive report');
+        });
+
+        document.getElementById('contactLink').addEventListener('click', function(e) {
+            e.preventDefault();
+            alert('For support, please contact us at support@pneumoniadetection.com');
+        });
+
+        // Mode Switching
+        const patientMode = document.getElementById('patientMode');
+        const medicalMode = document.getElementById('medicalMode');
+        const patientForm = document.getElementById('patientForm');
+        const medicalFeatures = document.getElementById('medicalFeatures');
+        const emergencyWarning = document.getElementById('emergencyWarning');
+
+        function switchMode(mode) {
+            if (mode === 'patient') {
+                patientMode.classList.add('active');
+                medicalMode.classList.remove('active');
+                patientForm.classList.add('active');
+                medicalFeatures.classList.remove('active');
+                document.getElementById('uploadForm').style.display = 'block';
+            } else {
+                patientMode.classList.remove('active');
+                medicalMode.classList.add('active');
+                patientForm.classList.remove('active');
+                medicalFeatures.classList.add('active');
+                document.getElementById('uploadForm').style.display = 'none';
+            }
+        }
+
+        patientMode.addEventListener('click', () => switchMode('patient'));
+        medicalMode.addEventListener('click', () => switchMode('medical'));
+
+        // Show emergency warning for high confidence pneumonia detection
+        {% if result == "Pneumonia Detected" and confidence > 80 %}
+            emergencyWarning.classList.add('active');
+        {% endif %}
+
+        // Annotation Tools
+        const drawBtn = document.getElementById('drawBtn');
+        const measureBtn = document.getElementById('measureBtn');
+        const compareBtn = document.getElementById('compareBtn');
+        const annotationOverlay = document.getElementById('annotationOverlay');
+        const annotatedImage = document.getElementById('annotatedImage');
+        let isDrawing = false;
+        let isMeasuring = false;
+        let startX, startY;
+        let annotations = [];
+        let measurements = [];
+
+        // Drawing functionality
+        drawBtn.addEventListener('click', () => {
+            isDrawing = !isDrawing;
+            isMeasuring = false;
+            drawBtn.classList.toggle('active');
+            measureBtn.classList.remove('active');
+            annotationOverlay.style.cursor = isDrawing ? 'crosshair' : 'default';
+        });
+
+        measureBtn.addEventListener('click', () => {
+            isMeasuring = !isMeasuring;
+            isDrawing = false;
+            measureBtn.classList.toggle('active');
+            drawBtn.classList.remove('active');
+            annotationOverlay.style.cursor = isMeasuring ? 'crosshair' : 'default';
+        });
+
+        annotationOverlay.addEventListener('mousedown', (e) => {
+            if (!isDrawing && !isMeasuring) return;
+            startX = e.offsetX;
+            startY = e.offsetY;
+        });
+
+        annotationOverlay.addEventListener('mousemove', (e) => {
+            if (!isDrawing && !isMeasuring) return;
+            const annotation = document.createElement('div');
+            annotation.className = isDrawing ? 'annotation' : 'measurement';
+            annotation.style.left = startX + 'px';
+            annotation.style.top = startY + 'px';
+            annotation.style.width = (e.offsetX - startX) + 'px';
+            annotation.style.height = (e.offsetY - startY) + 'px';
+            
+            if (isMeasuring) {
+                const distance = Math.sqrt(Math.pow(e.offsetX - startX, 2) + Math.pow(e.offsetY - startY, 2));
+                annotation.setAttribute('data-distance', Math.round(distance) + 'px');
+            }
+            
+            annotationOverlay.appendChild(annotation);
+        });
+
+        annotationOverlay.addEventListener('mouseup', () => {
+            if (isDrawing || isMeasuring) {
+                const annotations = annotationOverlay.getElementsByClassName(isDrawing ? 'annotation' : 'measurement');
+                const lastAnnotation = annotations[annotations.length - 1];
+                if (lastAnnotation) {
+                    if (isMeasuring) {
+                        const distance = lastAnnotation.getAttribute('data-distance');
+                        const label = document.createElement('div');
+                        label.className = 'measurement-label';
+                        label.textContent = distance;
+                        label.style.left = (parseInt(lastAnnotation.style.left) + parseInt(lastAnnotation.style.width) / 2) + 'px';
+                        label.style.top = (parseInt(lastAnnotation.style.top) + parseInt(lastAnnotation.style.height) / 2) + 'px';
+                        annotationOverlay.appendChild(label);
+                    }
+                }
+            }
+        });
+
+        // Compare functionality
+        compareBtn.addEventListener('click', () => {
+            const fileInput = document.createElement('input');
+            fileInput.type = 'file';
+            fileInput.accept = 'image/*';
+            fileInput.onchange = (e) => {
+                const file = e.target.files[0];
+                if (file) {
+                    const reader = new FileReader();
+                    reader.onload = (e) => {
+                        const compareImage = document.createElement('img');
+                        compareImage.src = e.target.result;
+                        compareImage.className = 'compare-image';
+                        const compareContainer = document.createElement('div');
+                        compareContainer.className = 'compare-container';
+                        compareContainer.appendChild(annotatedImage.cloneNode(true));
+                        compareContainer.appendChild(compareImage);
+                        medicalFeatures.appendChild(compareContainer);
+                    };
+                    reader.readAsDataURL(file);
+                }
+            };
+            fileInput.click();
+        });
+
+        // Medical Notes
+        const addNoteBtn = document.getElementById('addNoteBtn');
+        const notesList = document.getElementById('notesList');
+        const clinicalNotes = document.querySelector('.medical-notes textarea');
+
+        addNoteBtn.addEventListener('click', () => {
+            const note = clinicalNotes.value.trim();
+            if (note) {
+                const noteItem = document.createElement('li');
+                noteItem.className = 'note-item';
+                noteItem.innerHTML = `
+                    <div>${note}</div>
+                    <small>${new Date().toLocaleString()}</small>
+                    <button class="delete-note"><i class="fas fa-trash"></i></button>
+                `;
+                notesList.appendChild(noteItem);
+                clinicalNotes.value = '';
+                
+                // Add delete functionality
+                noteItem.querySelector('.delete-note').addEventListener('click', () => {
+                    noteItem.remove();
+                });
+            }
+        });
+
+        // Save annotations and notes
+        function saveMedicalData() {
+            const medicalData = {
+                annotations: Array.from(annotationOverlay.getElementsByClassName('annotation')).map(ann => ({
+                    left: ann.style.left,
+                    top: ann.style.top,
+                    width: ann.style.width,
+                    height: ann.style.height
+                })),
+                measurements: Array.from(annotationOverlay.getElementsByClassName('measurement')).map(meas => ({
+                    left: meas.style.left,
+                    top: meas.style.top,
+                    width: meas.style.width,
+                    height: meas.style.height,
+                    distance: meas.getAttribute('data-distance')
+                })),
+                notes: Array.from(notesList.getElementsByClassName('note-item')).map(note => ({
+                    text: note.querySelector('div').textContent,
+                    timestamp: note.querySelector('small').textContent
+                }))
+            };
+
+            fetch('/save_annotation', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(medicalData)
+            })
+            .then(response => response.json())
+            .then(data => {
+                alert('Medical data saved successfully!');
+            })
+            .catch(error => {
+                console.error('Error saving medical data:', error);
+                alert('Error saving medical data. Please try again.');
+            });
+        }
+
+        // Add save button to medical features
+        const saveBtn = document.createElement('button');
+        saveBtn.className = 'annotation-btn';
+        saveBtn.innerHTML = '<i class="fas fa-save"></i>Save Medical Data';
+        saveBtn.onclick = saveMedicalData;
+        document.querySelector('.annotation-tools').appendChild(saveBtn);
+    </script>
+</body>
+</html>
