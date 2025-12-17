@@ -544,7 +544,6 @@ def predict():
             print(f"Warning: Could not save patient info: {e}")
 
         # Generate unique filename to avoid conflicts
-        import uuid
         file_ext = os.path.splitext(file.filename)[1]
         unique_filename = f"{uuid.uuid4()}{file_ext}"
         temp_file_path = os.path.join(UPLOAD_FOLDER, unique_filename)
