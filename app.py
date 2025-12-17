@@ -58,32 +58,58 @@ if not os.path.exists(PATIENTS_FILE):
     with open(PATIENTS_FILE, 'w') as f:
         json.dump([], f)
 
-# Load model
-MODEL_PATH = "saved_model/pneumonia_detector_lstm.h5"
-FALLBACK_MODEL_PATH = "saved_model/pneumonia_detector.h5"
+# Load model - Use absolute paths that work in both local and Render
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+MODEL_PATH = os.path.join(BASE_DIR, "saved_model", "pneumonia_detector_lstm.h5")
+FALLBACK_MODEL_PATH = os.path.join(BASE_DIR, "saved_model", "pneumonia_detector.h5")
+# Also check for typo in filename
+FALLBACK_MODEL_PATH_ALT = os.path.join(BASE_DIR, "saved_model", "prenumonia_detector.h5")
 model = None  # Initialize model as None
 use_lstm = False  # Flag to track which model is being used
 
 def load_model_on_demand():
     global model, use_lstm
     if model is None:
+        # Try LSTM model first
         if os.path.exists(MODEL_PATH):
             try:
                 model = tf.keras.models.load_model(MODEL_PATH)
                 use_lstm = True
                 print(f"Loaded LSTM model from {MODEL_PATH}")
+                return model
             except Exception as e:
                 print(f"Error loading LSTM model: {e}. Trying fallback model...")
-                if os.path.exists(FALLBACK_MODEL_PATH):
-                    model = tf.keras.models.load_model(FALLBACK_MODEL_PATH)
-                    use_lstm = False
-                    print(f"Loaded fallback model from {FALLBACK_MODEL_PATH}")
-        elif os.path.exists(FALLBACK_MODEL_PATH):
-            model = tf.keras.models.load_model(FALLBACK_MODEL_PATH)
-            use_lstm = False
-            print(f"LSTM model not found. Loaded fallback model from {FALLBACK_MODEL_PATH}")
+        
+        # Try fallback model
+        if os.path.exists(FALLBACK_MODEL_PATH):
+            try:
+                model = tf.keras.models.load_model(FALLBACK_MODEL_PATH)
+                use_lstm = False
+                print(f"Loaded fallback model from {FALLBACK_MODEL_PATH}")
+                return model
+            except Exception as e:
+                print(f"Error loading fallback model: {e}. Trying alternate path...")
+        
+        # Try alternate path (with typo)
+        if os.path.exists(FALLBACK_MODEL_PATH_ALT):
+            try:
+                model = tf.keras.models.load_model(FALLBACK_MODEL_PATH_ALT)
+                use_lstm = False
+                print(f"Loaded fallback model from {FALLBACK_MODEL_PATH_ALT}")
+                return model
+            except Exception as e:
+                print(f"Error loading alternate model: {e}")
+        
+        # If no model found, raise error with helpful message
+        print(f"MODEL_PATH: {MODEL_PATH} (exists: {os.path.exists(MODEL_PATH)})")
+        print(f"FALLBACK_MODEL_PATH: {FALLBACK_MODEL_PATH} (exists: {os.path.exists(FALLBACK_MODEL_PATH)})")
+        print(f"FALLBACK_MODEL_PATH_ALT: {FALLBACK_MODEL_PATH_ALT} (exists: {os.path.exists(FALLBACK_MODEL_PATH_ALT)})")
+        print(f"BASE_DIR: {BASE_DIR}")
+        if os.path.exists(os.path.join(BASE_DIR, "saved_model")):
+            print(f"Files in saved_model: {os.listdir(os.path.join(BASE_DIR, 'saved_model'))}")
         else:
-            raise FileNotFoundError("No model file found. Please train a model first.")
+            print(f"saved_model directory does not exist at {os.path.join(BASE_DIR, 'saved_model')}")
+        raise FileNotFoundError("No model file found. Please ensure model files are in saved_model/ directory.")
     return model
 
 def load_history():

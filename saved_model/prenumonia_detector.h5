@@ -1,0 +1,13 @@
+from tensorflow.keras.models import load_model
+import numpy as np
+from scripts.preprocess import create_generators
+
+# Load trained model
+model = load_model('saved_model/pneumonia_detector.h5')
+
+# Load test data
+_, _, test_gen = create_generators()
+
+# Evaluate
+loss, accuracy = model.evaluate(test_gen)
+print(f"Test Accuracy: {accuracy*100:.2f}%")

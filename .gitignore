@@ -13,13 +13,13 @@ myenv/
 instance/
 .webassets-cache
 
-# Model files (large)
+# Model files (large) - but allow saved_model for deployment
 *.h5
 *.hdf5
 *.pkl
 *.pth
 *.pt
-saved_model/
+# saved_model/  # Commented out to allow model files in repo for deployment
 
 # Data
 dataset/
