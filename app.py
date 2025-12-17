@@ -621,7 +621,7 @@ def predict():
     # Get current timestamp
     analysis_date = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
-    # Save analysis details for report
+    # Save analysis details for report (including all new features)
     analysis_data = {
         "filename": file.filename,
         "result": result,
@@ -631,7 +631,14 @@ def predict():
         "pattern_recognition": pattern_recognition,
         "analysis_date": analysis_date,
         "image_path": temp_file_path,
-        "patient_info": json.dumps(patient_info)
+        "patient_info": json.dumps(patient_info),
+        "severity_score": str(severity_score) if severity_score else "N/A",
+        "severity_level": str(severity_level) if severity_level else "N/A",
+        "opacity_percentage": str(round(opacity_percentage * 100, 2)) if isinstance(opacity_percentage, float) else "0",
+        "affected_area": str(affected_area),
+        "detected_regions": json.dumps(detected_regions) if detected_regions else "[]",
+        "treatment_recommendations": json.dumps(treatment_recommendations) if treatment_recommendations else "[]",
+        "visualization_path": vis_path if vis_path != temp_file_path else ""
     }
     
     # Store the analysis data in temporary directory
@@ -746,12 +753,12 @@ def download_report():
     pdf.ln(5)
     pdf.set_font("Arial", "", 12)
     details = [
-        ("Diagnosis", analysis_data["result"]),
-        ("Overall Confidence", f"{analysis_data['confidence']}%"),
-        ("Image Quality", f"{analysis_data['image_quality']}%"),
-        ("Feature Detection", f"{analysis_data['feature_detection']}%"),
-        ("Pattern Recognition", f"{analysis_data['pattern_recognition']}%"),
-        ("Analysis Date", analysis_data["analysis_date"])
+        ("Diagnosis", analysis_data.get("result", "N/A")),
+        ("Overall Confidence", f"{analysis_data.get('confidence', 'N/A')}%"),
+        ("Image Quality", f"{analysis_data.get('image_quality', 'N/A')}%"),
+        ("Feature Detection", f"{analysis_data.get('feature_detection', 'N/A')}%"),
+        ("Pattern Recognition", f"{analysis_data.get('pattern_recognition', 'N/A')}%"),
+        ("Analysis Date", analysis_data.get("analysis_date", "N/A"))
     ]
 
     for label, value in details:
@@ -759,6 +766,104 @@ def download_report():
         pdf.cell(60, 10, label + ":", 0)
         pdf.set_font("Arial", "", 12)
         pdf.cell(0, 10, str(value), ln=True)
+
+    # Add Severity Assessment
+    severity_score = analysis_data.get("severity_score", "N/A")
+    severity_level = analysis_data.get("severity_level", "N/A")
+    if severity_score != "N/A" and severity_level != "N/A":
+        pdf.ln(5)
+        pdf.set_font("Arial", "B", 14)
+        pdf.cell(0, 10, "Pneumonia Severity Assessment", ln=True)
+        pdf.ln(5)
+        pdf.set_font("Arial", "B", 12)
+        pdf.cell(0, 10, f"Severity Score: {severity_score}/100", ln=True)
+        pdf.set_font("Arial", "", 12)
+        pdf.cell(0, 10, f"Severity Level: {severity_level.title()}", ln=True)
+        pdf.ln(3)
+        
+        # Severity metrics
+        opacity_pct = analysis_data.get("opacity_percentage", "0")
+        affected_area = analysis_data.get("affected_area", "0")
+        pdf.set_font("Arial", "B", 11)
+        pdf.cell(0, 8, "Severity Metrics:", ln=True)
+        pdf.set_font("Arial", "", 10)
+        pdf.cell(0, 6, f"  • Opacity Percentage: {opacity_pct}%", ln=True)
+        pdf.cell(0, 6, f"  • Affected Area: {affected_area} pixels", ln=True)
+        pdf.cell(0, 6, f"  • Detection Confidence: {analysis_data.get('confidence', 'N/A')}%", ln=True)
+
+    # Add Detected Regions Analysis
+    detected_regions_str = analysis_data.get("detected_regions", "[]")
+    try:
+        detected_regions = json.loads(detected_regions_str) if detected_regions_str else []
+        if detected_regions:
+            pdf.ln(5)
+            pdf.set_font("Arial", "B", 14)
+            pdf.cell(0, 10, "Detected Regions Analysis", ln=True)
+            pdf.ln(3)
+            pdf.set_font("Arial", "", 10)
+            pdf.multi_cell(0, 6, "The following areas were identified by the AI model as significant for the diagnosis:", align="L")
+            pdf.ln(3)
+            
+            for i, region in enumerate(detected_regions[:5]):  # Limit to 5 regions for PDF
+                pdf.set_font("Arial", "B", 11)
+                pdf.cell(0, 8, f"Region {region.get('id', i+1)}: {region.get('location', 'Unknown')}", ln=True)
+                pdf.set_font("Arial", "", 9)
+                pdf.cell(0, 5, f"  Detection Intensity: {region.get('intensity', 0)*100:.1f}%", ln=True)
+                pdf.cell(0, 5, f"  Area Size: {region.get('area', 0)} pixels", ln=True)
+                
+                explanation = region.get('explanation', {})
+                if explanation:
+                    pdf.set_font("Arial", "I", 9)
+                    pdf.multi_cell(0, 5, f"  Explanation: {explanation.get('text', 'N/A')}", align="L")
+                    pdf.ln(2)
+    except:
+        pass
+
+    # Add Treatment Recommendations
+    treatment_recs_str = analysis_data.get("treatment_recommendations", "[]")
+    try:
+        treatment_recommendations = json.loads(treatment_recs_str) if treatment_recs_str else []
+        if treatment_recommendations:
+            pdf.ln(5)
+            pdf.set_font("Arial", "B", 14)
+            pdf.cell(0, 10, "Treatment Recommendations", ln=True)
+            pdf.ln(3)
+            pdf.set_font("Arial", "", 10)
+            pdf.multi_cell(0, 6, "Based on the severity assessment and clinical guidelines, the following recommendations are suggested:", align="L")
+            pdf.ln(3)
+            
+            for rec in treatment_recommendations:
+                pdf.set_font("Arial", "B", 11)
+                pdf.cell(0, 8, f"{rec.get('type', 'Recommendation')} ({rec.get('priority', 'N/A')} Priority)", ln=True)
+                pdf.set_font("Arial", "", 9)
+                pdf.multi_cell(0, 5, rec.get('description', 'N/A'), align="L")
+                
+                if rec.get('actions'):
+                    pdf.set_font("Arial", "B", 9)
+                    pdf.cell(0, 6, "Recommended Actions:", ln=True)
+                    pdf.set_font("Arial", "", 8)
+                    for action in rec.get('actions', []):
+                        pdf.cell(10, 5, "", 0)  # Indent
+                        pdf.cell(0, 5, f"• {action}", ln=True)
+                
+                if rec.get('medications'):
+                    pdf.set_font("Arial", "B", 9)
+                    pdf.cell(0, 6, "Medications:", ln=True)
+                    pdf.set_font("Arial", "", 8)
+                    for med in rec.get('medications', []):
+                        pdf.cell(10, 5, "", 0)  # Indent
+                        pdf.cell(0, 5, f"• {med}", ln=True)
+                    if rec.get('duration'):
+                        pdf.cell(10, 5, "", 0)
+                        pdf.cell(0, 5, f"  Duration: {rec.get('duration')}", ln=True)
+                
+                if rec.get('note'):
+                    pdf.set_font("Arial", "I", 8)
+                    pdf.multi_cell(0, 5, f"Note: {rec.get('note')}", align="L")
+                
+                pdf.ln(2)
+    except Exception as e:
+        print(f"Error adding treatment recommendations to PDF: {e}")
 
     # Add confidence explanation
     pdf.ln(5)
@@ -768,11 +873,37 @@ def download_report():
     pdf.multi_cell(0, 6, "The confidence score is calculated based on multiple factors including model accuracy, image quality, feature detection, and pattern recognition. A confidence score above 80% indicates high reliability in the diagnosis.", align="L")
 
     # Add the analyzed image
-    if os.path.exists(analysis_data["image_path"]):
+    image_path = analysis_data.get("image_path", "")
+    if image_path and os.path.exists(image_path):
         pdf.ln(10)
         pdf.set_font("Arial", "B", 12)
         pdf.cell(0, 10, "Analyzed X-ray Image:", ln=True)
-        pdf.image(analysis_data["image_path"], x=50, y=None, w=110)
+        try:
+            pdf.image(image_path, x=50, y=None, w=110)
+        except:
+            pdf.cell(0, 10, "[Image could not be embedded]", ln=True)
+    
+    # Add visualization image if available
+    vis_path = analysis_data.get("visualization_path", "")
+    if vis_path and os.path.exists(vis_path) and vis_path != image_path:
+        pdf.ln(5)
+        pdf.set_font("Arial", "B", 12)
+        pdf.cell(0, 10, "Detection Visualization (Heat Map):", ln=True)
+        pdf.set_font("Arial", "", 9)
+        pdf.cell(0, 6, "Red areas indicate higher model attention", ln=True)
+        try:
+            pdf.image(vis_path, x=50, y=None, w=110)
+        except:
+            pdf.cell(0, 10, "[Visualization could not be embedded]", ln=True)
+    
+    # Add important disclaimer
+    pdf.ln(10)
+    pdf.set_font("Arial", "B", 10)
+    pdf.set_text_color(255, 0, 0)
+    pdf.cell(0, 8, "IMPORTANT DISCLAIMER:", ln=True)
+    pdf.set_font("Arial", "", 9)
+    pdf.set_text_color(0, 0, 0)
+    pdf.multi_cell(0, 5, "This report is generated by an AI-assisted diagnostic tool. All recommendations are suggestions and should be reviewed and validated by a qualified medical professional. This tool is for assistance only and should not replace professional medical judgment. Always consult with a healthcare provider for proper diagnosis and treatment.", align="L")
 
     # Save the PDF
     pdf_path = os.path.join(REPORTS_FOLDER, "report.pdf")
