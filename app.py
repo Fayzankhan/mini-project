@@ -101,14 +101,29 @@ def load_model_on_demand():
                 print(f"Error loading alternate model: {e}")
         
         # If no model found, raise error with helpful message
+        print("=" * 80)
+        print("MODEL LOADING DEBUG INFO:")
+        print(f"BASE_DIR: {BASE_DIR}")
         print(f"MODEL_PATH: {MODEL_PATH} (exists: {os.path.exists(MODEL_PATH)})")
         print(f"FALLBACK_MODEL_PATH: {FALLBACK_MODEL_PATH} (exists: {os.path.exists(FALLBACK_MODEL_PATH)})")
         print(f"FALLBACK_MODEL_PATH_ALT: {FALLBACK_MODEL_PATH_ALT} (exists: {os.path.exists(FALLBACK_MODEL_PATH_ALT)})")
-        print(f"BASE_DIR: {BASE_DIR}")
-        if os.path.exists(os.path.join(BASE_DIR, "saved_model")):
-            print(f"Files in saved_model: {os.listdir(os.path.join(BASE_DIR, 'saved_model'))}")
+        
+        saved_model_dir = os.path.join(BASE_DIR, "saved_model")
+        print(f"saved_model directory: {saved_model_dir} (exists: {os.path.exists(saved_model_dir)})")
+        
+        if os.path.exists(saved_model_dir):
+            files = os.listdir(saved_model_dir)
+            print(f"Files in saved_model: {files}")
+            for f in files:
+                file_path = os.path.join(saved_model_dir, f)
+                if os.path.isfile(file_path):
+                    size = os.path.getsize(file_path)
+                    print(f"  - {f}: {size} bytes ({size / (1024*1024):.2f} MB)")
         else:
-            print(f"saved_model directory does not exist at {os.path.join(BASE_DIR, 'saved_model')}")
+            print(f"saved_model directory does not exist at {saved_model_dir}")
+            print(f"Current working directory: {os.getcwd()}")
+            print(f"Files in BASE_DIR: {os.listdir(BASE_DIR) if os.path.exists(BASE_DIR) else 'BASE_DIR does not exist'}")
+        print("=" * 80)
         raise FileNotFoundError("No model file found. Please ensure model files are in saved_model/ directory.")
     return model
 
