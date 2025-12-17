@@ -7,20 +7,46 @@ from fpdf import FPDF
 from datetime import datetime
 from skimage import metrics
 import json
+import tempfile
+import matplotlib.pyplot as plt
+from sklearn.metrics import confusion_matrix, classification_report
+import seaborn as sns
+
+# Import advanced features
+try:
+    from advanced_models import (
+        calculate_severity_score,
+        get_treatment_recommendations
+    )
+    ADVANCED_FEATURES_AVAILABLE = True
+except ImportError:
+    ADVANCED_FEATURES_AVAILABLE = False
+    print("Advanced features not available. Install required packages.")
 
 app = Flask(__name__)
 
-# Load model
-MODEL_PATH = "saved_model/pneumonia_detector.h5"
-model = tf.keras.models.load_model(MODEL_PATH)
+# Create directories for file storage
+# Use environment variable for production (Render), temp dir for local
+if os.getenv('RENDER'):
+    # Production: Use persistent storage
+    BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+    UPLOAD_FOLDER = os.path.join(BASE_DIR, "static", "uploads")
+    REPORTS_FOLDER = os.path.join(BASE_DIR, "static", "reports")
+    HISTORY_FILE = os.path.join(BASE_DIR, "static", "history.json")
+    PATIENTS_FILE = os.path.join(BASE_DIR, "static", "patients.json")
+else:
+    # Local development: Use temp directory
+    temp_dir = tempfile.gettempdir()
+    UPLOAD_FOLDER = os.path.join(temp_dir, "uploads")
+    REPORTS_FOLDER = os.path.join(temp_dir, "reports")
+    HISTORY_FILE = os.path.join(temp_dir, "history.json")
+    PATIENTS_FILE = os.path.join(temp_dir, "patients.json")
 
-# Ensure upload folder exists
-UPLOAD_FOLDER = "static/uploads"
-REPORTS_FOLDER = "static/reports"
-HISTORY_FILE = "static/history.json"
-PATIENTS_FILE = "static/patients.json"
+# Ensure directories exist
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 os.makedirs(REPORTS_FOLDER, exist_ok=True)
+os.makedirs(os.path.dirname(HISTORY_FILE) if os.path.dirname(HISTORY_FILE) else '.', exist_ok=True)
+os.makedirs(os.path.dirname(PATIENTS_FILE) if os.path.dirname(PATIENTS_FILE) else '.', exist_ok=True)
 
 # Initialize history and patients files if they don't exist
 if not os.path.exists(HISTORY_FILE):
@@ -30,6 +56,34 @@ if not os.path.exists(HISTORY_FILE):
 if not os.path.exists(PATIENTS_FILE):
     with open(PATIENTS_FILE, 'w') as f:
         json.dump([], f)
+
+# Load model
+MODEL_PATH = "saved_model/pneumonia_detector_lstm.h5"
+FALLBACK_MODEL_PATH = "saved_model/pneumonia_detector.h5"
+model = None  # Initialize model as None
+use_lstm = False  # Flag to track which model is being used
+
+def load_model_on_demand():
+    global model, use_lstm
+    if model is None:
+        if os.path.exists(MODEL_PATH):
+            try:
+                model = tf.keras.models.load_model(MODEL_PATH)
+                use_lstm = True
+                print(f"Loaded LSTM model from {MODEL_PATH}")
+            except Exception as e:
+                print(f"Error loading LSTM model: {e}. Trying fallback model...")
+                if os.path.exists(FALLBACK_MODEL_PATH):
+                    model = tf.keras.models.load_model(FALLBACK_MODEL_PATH)
+                    use_lstm = False
+                    print(f"Loaded fallback model from {FALLBACK_MODEL_PATH}")
+        elif os.path.exists(FALLBACK_MODEL_PATH):
+            model = tf.keras.models.load_model(FALLBACK_MODEL_PATH)
+            use_lstm = False
+            print(f"LSTM model not found. Loaded fallback model from {FALLBACK_MODEL_PATH}")
+        else:
+            raise FileNotFoundError("No model file found. Please train a model first.")
+    return model
 
 def load_history():
     with open(HISTORY_FILE, 'r') as f:
@@ -109,19 +163,352 @@ def calculate_pattern_recognition(image):
     pattern_score = min(entropy / 8, 1) * 100
     return round(pattern_score, 2)
 
-# Function to preprocess image
-def preprocess_image(image_path):
+def make_gradcam_heatmap(img_array, model, last_conv_layer_name=None, pred_index=0):
+    """Generate Grad-CAM heatmap for visualization"""
+    try:
+        last_conv_layer = None
+        
+        # For CNN models, find the last convolutional layer
+        if use_lstm:
+            # For LSTM models, find the last conv layer in TimeDistributed layers
+            for layer in reversed(model.layers):
+                if hasattr(layer, 'layer') and hasattr(layer.layer, '__class__'):
+                    layer_class = str(layer.layer.__class__).lower()
+                    if 'conv2d' in layer_class:
+                        last_conv_layer = layer
+                        break
+                elif 'conv2d' in str(type(layer)).lower():
+                    last_conv_layer = layer
+                    break
+        else:
+            # For regular CNN models (like MobileNetV2)
+            # Check if first layer is a base model
+            if len(model.layers) > 0:
+                first_layer = model.layers[0]
+                # If it's a functional model (like MobileNetV2)
+                if hasattr(first_layer, 'layers'):
+                    # Search in base model
+                    for layer in reversed(first_layer.layers):
+                        if 'conv' in layer.name.lower() and 'block' in layer.name.lower():
+                            last_conv_layer = layer
+                            break
+                    # If not found, get the last conv layer
+                    if last_conv_layer is None:
+                        for layer in reversed(first_layer.layers):
+                            if 'conv' in layer.name.lower():
+                                last_conv_layer = layer
+                                break
+                else:
+                    # Search in model layers
+                    for layer in reversed(model.layers):
+                        if 'conv' in layer.name.lower():
+                            last_conv_layer = layer
+                            break
+        
+        if last_conv_layer is None:
+            # Fallback: use fallback heatmap
+            return generate_fallback_heatmap(img_array), None
+        
+        # Create a model that maps the input image to the activations of the last conv layer
+        # as well as the output predictions
+        try:
+            grad_model = tf.keras.models.Model(
+                [model.inputs], [last_conv_layer.output, model.output]
+            )
+        except:
+            # If that fails, try accessing through base model
+            if hasattr(model.layers[0], 'layers'):
+                base_model = model.layers[0]
+                grad_model = tf.keras.models.Model(
+                    [base_model.input], [last_conv_layer.output, model.output]
+                )
+            else:
+                return generate_fallback_heatmap(img_array), None
+        
+        # Compute the gradient of the top predicted class for our input image
+        # with respect to the activations of the last conv layer
+        with tf.GradientTape() as tape:
+            conv_outputs, predictions = grad_model(img_array)
+            if len(predictions.shape) > 1:
+                pred = predictions[:, pred_index]
+            else:
+                pred = predictions[pred_index]
+        
+        # This is the gradient of the output neuron (top class or our chosen class)
+        # with regard to the output feature map of the last conv layer
+        grads = tape.gradient(pred, conv_outputs)
+        
+        # Handle different tensor shapes
+        if use_lstm:
+            # For LSTM: (batch, frames, h, w, channels) -> average over frames
+            pooled_grads = tf.reduce_mean(grads, axis=(0, 1, 2, 3))
+            conv_outputs_avg = tf.reduce_mean(conv_outputs[0], axis=0)
+        else:
+            # For CNN: (batch, h, w, channels)
+            pooled_grads = tf.reduce_mean(grads, axis=(0, 1, 2))
+            conv_outputs_avg = conv_outputs[0]
+        
+        # We multiply each channel in the feature map array
+        # by "how important this channel is" with regard to the top predicted class
+        heatmap = conv_outputs_avg @ pooled_grads[..., tf.newaxis]
+        heatmap = tf.squeeze(heatmap)
+        
+        # For visualization, we will normalize the heatmap between 0 & 1
+        heatmap = tf.maximum(heatmap, 0)
+        if tf.math.reduce_max(heatmap) > 0:
+            heatmap = heatmap / tf.math.reduce_max(heatmap)
+        heatmap = heatmap.numpy()
+        
+        return heatmap, last_conv_layer.name if hasattr(last_conv_layer, 'name') else 'unknown'
+    except Exception as e:
+        print(f"Error generating Grad-CAM: {e}")
+        import traceback
+        traceback.print_exc()
+        # Fallback: create a simple attention map based on image features
+        return generate_fallback_heatmap(img_array), None
+
+def generate_fallback_heatmap(img_array):
+    """Generate a fallback heatmap using image analysis"""
+    # Get the actual image (remove batch dimension)
+    if len(img_array.shape) == 5:  # LSTM: (batch, frames, h, w, c)
+        img = img_array[0, 0]  # Take first frame
+    else:  # CNN: (batch, h, w, c)
+        img = img_array[0]
+    
+    # Convert to grayscale if needed
+    if len(img.shape) == 3:
+        gray = cv2.cvtColor((img * 255).astype(np.uint8), cv2.COLOR_RGB2GRAY)
+    else:
+        gray = (img * 255).astype(np.uint8)
+    
+    # Detect edges and areas of interest
+    edges = cv2.Canny(gray, 50, 150)
+    
+    # Find contours
+    contours, _ = cv2.findContours(edges, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    
+    # Create heatmap based on edge density
+    heatmap = np.zeros_like(gray, dtype=np.float32)
+    for contour in contours:
+        if cv2.contourArea(contour) > 100:  # Filter small contours
+            cv2.fillPoly(heatmap, [contour], 1.0)
+    
+    # Apply Gaussian blur for smoother heatmap
+    heatmap = cv2.GaussianBlur(heatmap, (21, 21), 0)
+    
+    # Normalize
+    if heatmap.max() > 0:
+        heatmap = heatmap / heatmap.max()
+    
+    return heatmap
+
+def overlay_heatmap_on_image(img_path, heatmap, alpha=0.4):
+    """Overlay heatmap on original image"""
+    # Read original image
+    img = cv2.imread(img_path)
+    original_shape = img.shape[:2]
+    
+    # Resize heatmap to match original image size
+    heatmap_resized = cv2.resize(heatmap, (original_shape[1], original_shape[0]))
+    heatmap_resized = np.uint8(255 * heatmap_resized)
+    
+    # Apply colormap (red for high attention, blue for low)
+    heatmap_colored = cv2.applyColorMap(heatmap_resized, cv2.COLORMAP_JET)
+    
+    # Overlay heatmap on original image
+    overlayed = cv2.addWeighted(img, 1 - alpha, heatmap_colored, alpha, 0)
+    
+    return overlayed, heatmap_resized
+
+def identify_detected_regions(heatmap, threshold=0.5):
+    """Identify and explain detected regions in the heatmap"""
+    # Threshold the heatmap
+    binary_mask = (heatmap > threshold).astype(np.uint8) * 255
+    
+    # Find contours of detected regions
+    contours, _ = cv2.findContours(binary_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    
+    regions = []
+    for i, contour in enumerate(contours):
+        if cv2.contourArea(contour) > 100:  # Filter small regions
+            # Get bounding box
+            x, y, w, h = cv2.boundingRect(contour)
+            
+            # Calculate region properties
+            mask = np.zeros(heatmap.shape, dtype=np.uint8)
+            cv2.fillPoly(mask, [contour], 255)
+            region_intensity = np.mean(heatmap[mask > 0])
+            
+            # Determine region location
+            center_x, center_y = x + w // 2, y + h // 2
+            height, width = heatmap.shape
+            
+            if center_x < width * 0.4:
+                location = "Left lung"
+            elif center_x > width * 0.6:
+                location = "Right lung"
+            else:
+                location = "Central chest area"
+            
+            if center_y < height * 0.4:
+                location += " (upper)"
+            elif center_y > height * 0.6:
+                location += " (lower)"
+            else:
+                location += " (middle)"
+            
+            regions.append({
+                'id': i + 1,
+                'bbox': (x, y, w, h),
+                'intensity': float(region_intensity),
+                'area': int(cv2.contourArea(contour)),
+                'location': location,
+                'explanation': generate_region_explanation(region_intensity, location)
+            })
+    
+    return regions
+
+def generate_region_explanation(intensity, location):
+    """Generate explanation for why a region is marked"""
+    if intensity > 0.7:
+        severity = "high"
+        explanation = f"This area in the {location.lower()} shows strong indicators of potential pneumonia. The model detected significant opacity, consolidation patterns, or abnormal texture that are characteristic of lung infection."
+    elif intensity > 0.5:
+        severity = "moderate"
+        explanation = f"This region in the {location.lower()} displays moderate signs that may indicate pneumonia. The model identified subtle changes in lung tissue density or texture that warrant attention."
+    else:
+        severity = "low"
+        explanation = f"This area in the {location.lower()} shows minimal indicators. The model detected slight variations, but these may be within normal range or require further clinical correlation."
+    
+    return {
+        'severity': severity,
+        'text': explanation,
+        'recommendation': get_recommendation(severity)
+    }
+
+def get_recommendation(severity):
+    """Get recommendation based on severity"""
+    if severity == "high":
+        return "Immediate clinical evaluation recommended. Consider follow-up imaging and appropriate treatment."
+    elif severity == "moderate":
+        return "Clinical correlation advised. Monitor symptoms and consider follow-up if symptoms persist."
+    else:
+        return "Routine follow-up as per standard clinical protocol."
+
+def create_visualization_with_explanations(img_path, model, prediction, confidence):
+    """Create complete visualization with marked regions and explanations"""
+    # Preprocess image
+    img_array = preprocess_image(img_path)
+    
+    # Generate heatmap
+    heatmap, layer_name = make_gradcam_heatmap(img_array, model)
+    
+    if heatmap is None:
+        return None, None, []
+    
+    # Overlay heatmap on original image
+    overlayed_img, heatmap_resized = overlay_heatmap_on_image(img_path, heatmap)
+    
+    # Identify detected regions
+    regions = identify_detected_regions(heatmap_resized / 255.0)
+    
+    # Save visualization
+    vis_filename = f"visualization_{datetime.now().strftime('%Y%m%d_%H%M%S')}.jpg"
+    vis_path = os.path.join(UPLOAD_FOLDER, vis_filename)
+    cv2.imwrite(vis_path, overlayed_img)
+    
+    return vis_path, heatmap, regions
+
+# Function to preprocess image for LSTM model
+def preprocess_image(image_path, num_frames=4):
+    """Preprocess image for model prediction"""
+    global use_lstm
     image = cv2.imread(image_path)
     image = cv2.resize(image, (128, 128))  # Match model input size
     image = image / 255.0  # Normalize
-    image = np.expand_dims(image, axis=0)  # Add batch dimension
-    return image
+    
+    if use_lstm:
+        # Create sequence by duplicating the frame for LSTM model
+        sequence = np.tile(image[np.newaxis, ...], (num_frames, 1, 1, 1))
+        sequence = np.expand_dims(sequence, axis=0)  # Add batch dimension
+        return sequence
+    else:
+        # Regular CNN model expects single image
+        image = np.expand_dims(image, axis=0)  # Add batch dimension
+        return image
 
 @app.route("/", methods=["GET"])
 def home():
     history = load_history()
-    patients = load_patients()
-    return render_template("index.html", history=history, patients=patients)
+    return render_template("index.html", history=history)
+
+@app.route("/api/predict", methods=["POST"])
+def api_predict():
+    """API endpoint for Streamlit or other frontends"""
+    if "file" not in request.files:
+        return jsonify({"error": "No file uploaded"}), 400
+    
+    file = request.files["file"]
+    if file.filename == "":
+        return jsonify({"error": "No file selected"}), 400
+    
+    # Get patient information
+    patient_info = {
+        "name": request.form.get("name", "Not Available"),
+        "age": request.form.get("age", "Not Available"),
+        "gender": request.form.get("gender", "Not Available"),
+        "medical_history": request.form.get("medical_history", "Not Available")
+    }
+    
+    # Save file
+    temp_file_path = os.path.join(UPLOAD_FOLDER, file.filename)
+    file.save(temp_file_path)
+    
+    # Load model
+    model = load_model_on_demand()
+    
+    # Process image
+    sequence = preprocess_image(temp_file_path)
+    prediction = model.predict(sequence, verbose=0)[0][0]
+    confidence = round(float(prediction) * 100, 2)
+    
+    result = "Pneumonia Detected" if prediction > 0.5 else "No Pneumonia"
+    
+    # Calculate severity if advanced features available
+    severity_score = None
+    severity_level = None
+    treatment_recommendations = []
+    
+    if ADVANCED_FEATURES_AVAILABLE and result == "Pneumonia Detected":
+        try:
+            vis_path, heatmap, detected_regions = create_visualization_with_explanations(
+                temp_file_path, model, prediction, confidence
+            )
+            opacity_percentage = float(np.mean(heatmap > 0.5)) if heatmap is not None else float(prediction)
+            affected_area = int(np.sum(heatmap > 0.5)) if heatmap is not None else 0
+            
+            severity_score, severity_level = calculate_severity_score(
+                prediction=prediction,
+                opacity_percentage=opacity_percentage,
+                affected_area=affected_area
+            )
+            
+            treatment_recommendations = get_treatment_recommendations(
+                classification='bacterial',
+                severity=severity_level,
+                patient_info=patient_info
+            )
+        except Exception as e:
+            print(f"Error in advanced features: {e}")
+    
+    return jsonify({
+        "result": result,
+        "confidence": confidence,
+        "severity_score": severity_score,
+        "severity_level": severity_level,
+        "treatment_recommendations": treatment_recommendations,
+        "patient_info": patient_info
+    })
 
 @app.route("/predict", methods=["POST"])
 def predict():
@@ -145,12 +532,15 @@ def predict():
     patients.append(patient_info)
     save_patients(patients)
 
-    # Save the uploaded file
-    file_path = os.path.join(UPLOAD_FOLDER, file.filename)
-    file.save(file_path)
+    # Save the uploaded file to temporary directory
+    temp_file_path = os.path.join(UPLOAD_FOLDER, file.filename)
+    file.save(temp_file_path)
+
+    # Load model on demand
+    model = load_model_on_demand()
 
     # Read the original image for quality assessment
-    original_image = cv2.imread(file_path)
+    original_image = cv2.imread(temp_file_path)
     
     # Calculate additional confidence metrics
     image_quality = calculate_image_quality(original_image)
@@ -158,14 +548,75 @@ def predict():
     pattern_recognition = calculate_pattern_recognition(original_image)
 
     # Process the image and get prediction
-    image = preprocess_image(file_path)
-    prediction = model.predict(image)[0][0]
+    sequence = preprocess_image(temp_file_path)
+    prediction = model.predict(sequence, verbose=0)[0][0]
     confidence = round(float(prediction) * 100, 2)
     
     if prediction > 0.5:
         result = "Pneumonia Detected"
     else:
         result = "No Pneumonia"
+
+    # Generate visualization with marked regions
+    vis_path, heatmap, detected_regions = create_visualization_with_explanations(
+        temp_file_path, model, prediction, confidence
+    )
+    
+    # If visualization failed, use original image
+    if vis_path is None:
+        vis_path = temp_file_path
+        detected_regions = []
+        visualization_url = None
+        opacity_percentage = 0.0
+        affected_area = 0
+    else:
+        # Create URL for visualization image
+        vis_filename = os.path.basename(vis_path)
+        visualization_url = f"/visualization/{vis_filename}"
+        
+        # Calculate opacity percentage and affected area from heatmap
+        if heatmap is not None:
+            opacity_percentage = float(np.mean(heatmap > 0.5))  # Percentage of high-intensity regions
+            affected_area = int(np.sum(heatmap > 0.5))  # Number of affected pixels
+        else:
+            opacity_percentage = float(prediction)  # Fallback to prediction
+            affected_area = len(detected_regions) * 1000 if detected_regions else 0
+
+    # Calculate severity score and get treatment recommendations
+    severity_score = None
+    severity_level = None
+    treatment_recommendations = []
+    
+    if ADVANCED_FEATURES_AVAILABLE and result == "Pneumonia Detected":
+        try:
+            # Calculate severity score
+            try:
+                severity_score, severity_level = calculate_severity_score(
+                    prediction=prediction,
+                    opacity_percentage=opacity_percentage,
+                    affected_area=affected_area
+                )
+                # Ensure severity_level is lowercase for CSS classes
+                severity_level = severity_level.lower() if severity_level else None
+            except Exception as e:
+                print(f"Error in severity calculation: {e}")
+                severity_score = None
+                severity_level = None
+            
+            # Determine classification (simplified - in production, use multi-class model)
+            classification = 'bacterial'  # Default, can be enhanced with multi-class model
+            
+            # Get treatment recommendations
+            treatment_recommendations = get_treatment_recommendations(
+                classification=classification,
+                severity=severity_level,
+                patient_info=patient_info
+            )
+        except Exception as e:
+            print(f"Error calculating advanced features: {e}")
+            severity_score = None
+            severity_level = None
+            treatment_recommendations = []
 
     # Get current timestamp
     analysis_date = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -179,11 +630,11 @@ def predict():
         "feature_detection": feature_detection,
         "pattern_recognition": pattern_recognition,
         "analysis_date": analysis_date,
-        "image_path": file_path,
-        "patient_info": json.dumps(patient_info)  # Properly serialize patient_info to JSON
+        "image_path": temp_file_path,
+        "patient_info": json.dumps(patient_info)
     }
     
-    # Store the analysis data in session
+    # Store the analysis data in temporary directory
     with open(os.path.join(REPORTS_FOLDER, "latest_analysis.txt"), "w") as f:
         for key, value in analysis_data.items():
             f.write(f"{key}:{value}\n")
@@ -204,7 +655,8 @@ def predict():
     return render_template(
         "index.html",
         result=result,
-        image_url=file_path,
+        image_url=temp_file_path,
+        visualization_url=visualization_url if vis_path != temp_file_path else None,
         confidence=confidence,
         image_quality=image_quality,
         feature_detection=feature_detection,
@@ -212,8 +664,23 @@ def predict():
         analysis_date=analysis_date,
         history=history,
         patient_info=patient_info,
-        show_patient_info=True  # Add this flag to show patient info in the template
+        show_patient_info=True,
+        detected_regions=detected_regions,
+        has_visualization=vis_path != temp_file_path and visualization_url is not None,
+        severity_score=severity_score,
+        severity_level=severity_level,
+        treatment_recommendations=treatment_recommendations,
+        opacity_percentage=round(opacity_percentage * 100, 2) if isinstance(opacity_percentage, float) else 0,
+        affected_area=affected_area
     )
+
+@app.route("/visualization/<filename>")
+def serve_visualization(filename):
+    """Serve visualization images"""
+    vis_path = os.path.join(UPLOAD_FOLDER, filename)
+    if os.path.exists(vis_path):
+        return send_file(vis_path, mimetype='image/jpeg')
+    return "Image not found", 404
 
 @app.route("/download_report")
 def download_report():
@@ -332,5 +799,64 @@ def save_annotation():
     # For now, we'll just return a success message
     return jsonify({"message": "Annotation saved successfully!"})
 
+def calculate_model_metrics(predictions, true_labels):
+    """Calculate and visualize model performance metrics"""
+    # Convert predictions to binary (0 or 1)
+    pred_binary = (predictions > 0.5).astype(int)
+    
+    # Calculate confusion matrix
+    cm = confusion_matrix(true_labels, pred_binary)
+    
+    # Create confusion matrix plot
+    plt.figure(figsize=(10, 8))
+    sns.heatmap(cm, annot=True, fmt='d', cmap='Blues')
+    plt.title('Confusion Matrix')
+    plt.ylabel('True Label')
+    plt.xlabel('Predicted Label')
+    
+    # Save plot to temporary directory
+    plot_path = os.path.join(REPORTS_FOLDER, 'confusion_matrix.png')
+    plt.savefig(plot_path)
+    plt.close()
+    
+    # Calculate metrics
+    tn, fp, fn, tp = cm.ravel()
+    accuracy = (tp + tn) / (tp + tn + fp + fn)
+    sensitivity = tp / (tp + fn) if (tp + fn) > 0 else 0
+    specificity = tn / (tn + fp) if (tn + fp) > 0 else 0
+    precision = tp / (tp + fp) if (tp + fp) > 0 else 0
+    
+    return {
+        'confusion_matrix': plot_path,
+        'accuracy': round(accuracy * 100, 2),
+        'sensitivity': round(sensitivity * 100, 2),
+        'specificity': round(specificity * 100, 2),
+        'precision': round(precision * 100, 2)
+    }
+
+@app.route("/model_performance")
+def model_performance():
+    # Load history from temporary storage
+    history = load_history()
+    
+    if not history:
+        return render_template("model_performance.html", 
+                             error="No prediction history available")
+    
+    # Extract predictions and true labels from history
+    predictions = []
+    true_labels = []
+    
+    for entry in history:
+        predictions.append(entry['confidence'] / 100)  # Convert confidence back to probability
+        true_labels.append(1 if entry['result'] == "Pneumonia Detected" else 0)
+    
+    # Calculate metrics
+    metrics = calculate_model_metrics(np.array(predictions), np.array(true_labels))
+    
+    return render_template("model_performance.html", 
+                         metrics=metrics,
+                         history_length=len(history))
+
 if __name__ == "__main__":
-    app.run(debug=True)
+    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 8080)))

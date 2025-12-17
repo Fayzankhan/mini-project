@@ -19,30 +19,75 @@
             color: #333;
         }
 
+        /* Professional Video Background */
         .video-background {
             position: fixed;
-            right: 0;
-            bottom: 0;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            z-index: -1;
+            filter: brightness(0.4) contrast(1.2) blur(1px);
+            opacity: 0.8;
+        }
+
+        /* Fallback gradient background */
+        body::before {
+            content: '';
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 25%, #0f3460 50%, #16213e 75%, #1a1a2e 100%);
+            background-size: 400% 400%;
+            animation: gradientShift 15s ease infinite;
+            z-index: -2;
+        }
+
+        @keyframes gradientShift {
+            0% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+            100% { background-position: 0% 50%; }
+        }
+
+        /* Ensure video covers properly */
+        #myVideo {
             min-width: 100%;
             min-height: 100%;
-            width: auto;
-            height: auto;
+            width: 100%;
+            height: 100%;
+        }
+
+        /* Overlay for better text readability */
+        body::after {
+            content: '';
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: radial-gradient(circle at center, transparent 0%, rgba(0, 0, 0, 0.3) 100%);
             z-index: -1;
-            filter: brightness(0.7);
+            pointer-events: none;
         }
 
         .content-wrapper {
             position: relative;
             z-index: 1;
-            background: rgba(28, 28, 45, 0.85);
-            backdrop-filter: blur(10px);
+            background: rgba(28, 28, 45, 0.92);
+            backdrop-filter: blur(15px) saturate(180%);
+            -webkit-backdrop-filter: blur(15px) saturate(180%);
             padding: 2rem;
             border-radius: 20px;
             margin: 2rem auto;
             max-width: 800px;
             width: 90%;
-            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4), 
+                        0 0 0 1px rgba(255, 255, 255, 0.1);
             color: #fff;
+            border: 1px solid rgba(255, 255, 255, 0.1);
         }
 
         h1 {
@@ -607,6 +652,95 @@
             resize: vertical;
         }
 
+        /* Professional Medical-Themed Animated Background */
+        .animated-background {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: -2;
+            background: linear-gradient(135deg, #0f3460 0%, #16213e 25%, #1a1a2e 50%, #16213e 75%, #0f3460 100%);
+            background-size: 400% 400%;
+            animation: gradientShift 20s ease infinite;
+            overflow: hidden;
+        }
+
+        .animated-background::before {
+            content: '';
+            position: absolute;
+            width: 200%;
+            height: 200%;
+            background: 
+                radial-gradient(circle at 20% 30%, rgba(0, 168, 255, 0.15) 0%, transparent 50%),
+                radial-gradient(circle at 80% 70%, rgba(102, 126, 234, 0.12) 0%, transparent 50%),
+                radial-gradient(circle at 50% 50%, rgba(118, 75, 162, 0.1) 0%, transparent 70%),
+                radial-gradient(circle at 10% 80%, rgba(0, 168, 255, 0.08) 0%, transparent 60%);
+            animation: backgroundMove 25s ease infinite;
+        }
+
+        .animated-background::after {
+            content: '';
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            background-image: 
+                radial-gradient(circle at 2px 2px, rgba(255, 255, 255, 0.03) 1px, transparent 0);
+            background-size: 50px 50px;
+            animation: patternMove 30s linear infinite;
+        }
+
+        @keyframes gradientShift {
+            0% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+            100% { background-position: 0% 50%; }
+        }
+
+        @keyframes backgroundMove {
+            0%, 100% { 
+                transform: translate(0, 0) rotate(0deg) scale(1);
+                opacity: 0.8;
+            }
+            33% { 
+                transform: translate(50px, -50px) rotate(120deg) scale(1.1);
+                opacity: 0.6;
+            }
+            66% { 
+                transform: translate(-30px, 30px) rotate(240deg) scale(0.9);
+                opacity: 0.7;
+            }
+        }
+
+        @keyframes patternMove {
+            0% { transform: translate(0, 0); }
+            100% { transform: translate(50px, 50px); }
+        }
+
+        /* Floating particles effect */
+        .particle {
+            position: absolute;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 50%;
+            animation: float 15s infinite ease-in-out;
+        }
+
+        @keyframes float {
+            0%, 100% {
+                transform: translateY(0) translateX(0);
+                opacity: 0;
+            }
+            10% {
+                opacity: 0.5;
+            }
+            90% {
+                opacity: 0.5;
+            }
+            50% {
+                transform: translateY(-100vh) translateX(50px);
+                opacity: 0.8;
+            }
+        }
+
         /* Mobile Responsive Design */
         @media (max-width: 768px) {
             .content-wrapper {
@@ -626,6 +760,18 @@
             .footer-links {
                 flex-wrap: wrap;
                 justify-content: center;
+            }
+
+            /* Optimize video for mobile */
+            .video-background {
+                filter: brightness(0.3) contrast(1.1);
+            }
+        }
+
+        /* Reduce video on low-end devices for performance */
+        @media (max-width: 480px) {
+            .video-background {
+                display: none; /* Hide video on very small screens for performance */
             }
         }
 
@@ -894,11 +1040,15 @@
         .form-group select,
         .form-group textarea {
             width: 100%;
+            max-width: 400px;
+            margin: 0 auto;
             padding: 0.8rem;
             border: 1px solid var(--border-color);
             border-radius: 8px;
             background: var(--card-bg);
             color: var(--text-color);
+            box-sizing: border-box;
+            display: block;
         }
 
         /* Symptoms Checklist */
@@ -938,6 +1088,566 @@
             font-size: 2rem;
             margin-bottom: 0.5rem;
         }
+
+        .patient-form,
+        .medical-features {
+            width: 100%;
+            max-width: 500px;
+            margin: 0 auto;
+        }
+
+        @media (max-width: 600px) {
+            .form-group input,
+            .form-group select,
+            .form-group textarea {
+                max-width: 100%;
+                font-size: 1rem;
+            }
+            .patient-form,
+            .medical-features {
+                max-width: 100%;
+                padding: 0.5rem;
+            }
+        }
+
+        /* Visualization Styles */
+        .image-visualization-container {
+            margin: 2rem 0;
+            padding: 1rem;
+            background: var(--card-bg);
+            border-radius: 10px;
+        }
+
+        .image-toggle-buttons {
+            display: flex;
+            gap: 1rem;
+            justify-content: center;
+            margin-bottom: 1rem;
+        }
+
+        .toggle-btn {
+            background: var(--primary-color);
+            border: none;
+            border-radius: 8px;
+            padding: 0.8rem 1.5rem;
+            color: white;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            transition: all 0.3s ease;
+            font-size: 1rem;
+        }
+
+        .toggle-btn:hover {
+            background: var(--secondary-color);
+            transform: translateY(-2px);
+        }
+
+        .toggle-btn.active {
+            background: var(--secondary-color);
+            box-shadow: 0 2px 10px rgba(0, 168, 255, 0.3);
+        }
+
+        .image-wrapper {
+            position: relative;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            margin: 1rem 0;
+        }
+
+        .xray-image {
+            max-width: 100%;
+            height: auto;
+            border-radius: 10px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+            max-height: 600px;
+        }
+
+        .visualization-legend {
+            margin-top: 1rem;
+            padding: 1rem;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 8px;
+            text-align: center;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 1rem;
+        }
+
+        .legend-color {
+            width: 200px;
+            height: 20px;
+            border-radius: 10px;
+        }
+
+        /* Detected Regions Section */
+        .detected-regions-section {
+            margin: 2rem 0;
+            padding: 1.5rem;
+            background: var(--card-bg);
+            border-radius: 10px;
+        }
+
+        .detected-regions-section h3 {
+            color: var(--primary-color);
+            margin-bottom: 1rem;
+            font-size: 1.5rem;
+        }
+
+        .section-description {
+            color: #888;
+            margin-bottom: 1.5rem;
+            font-size: 0.95rem;
+        }
+
+        .region-card {
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 10px;
+            padding: 1.5rem;
+            margin-bottom: 1rem;
+            border-left: 4px solid var(--primary-color);
+            transition: transform 0.3s ease;
+        }
+
+        .region-card:hover {
+            transform: translateX(5px);
+        }
+
+        .region-card.severity-high {
+            border-left-color: #ff6b6b;
+            background: rgba(255, 107, 107, 0.1);
+        }
+
+        .region-card.severity-moderate {
+            border-left-color: #ffa500;
+            background: rgba(255, 165, 0, 0.1);
+        }
+
+        .region-card.severity-low {
+            border-left-color: #4ecdc4;
+            background: rgba(78, 205, 196, 0.1);
+        }
+
+        .region-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1rem;
+            flex-wrap: wrap;
+            gap: 1rem;
+        }
+
+        .region-header h4 {
+            color: var(--text-color);
+            margin: 0;
+            font-size: 1.2rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .severity-badge {
+            padding: 0.4rem 1rem;
+            border-radius: 20px;
+            font-size: 0.85rem;
+            font-weight: bold;
+            text-transform: uppercase;
+        }
+
+        .severity-badge.severity-high {
+            background: rgba(255, 107, 107, 0.3);
+            color: #ff6b6b;
+        }
+
+        .severity-badge.severity-moderate {
+            background: rgba(255, 165, 0, 0.3);
+            color: #ffa500;
+        }
+
+        .severity-badge.severity-low {
+            background: rgba(78, 205, 196, 0.3);
+            color: #4ecdc4;
+        }
+
+        .region-details {
+            margin-top: 1rem;
+        }
+
+        .region-metrics {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+            margin-bottom: 1rem;
+            padding: 1rem;
+            background: rgba(0, 0, 0, 0.2);
+            border-radius: 8px;
+        }
+
+        .metric {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .metric-label {
+            color: #888;
+            font-size: 0.9rem;
+        }
+
+        .metric-value {
+            color: var(--primary-color);
+            font-weight: bold;
+            font-size: 1.1rem;
+        }
+
+        .region-explanation {
+            margin-top: 1rem;
+        }
+
+        .region-explanation p {
+            color: var(--text-color);
+            line-height: 1.6;
+            margin: 0.5rem 0;
+        }
+
+        .recommendation-box {
+            margin-top: 1rem;
+            padding: 1rem;
+            background: rgba(46, 204, 113, 0.1);
+            border-left: 4px solid #2ecc71;
+            border-radius: 5px;
+            display: flex;
+            align-items: flex-start;
+            gap: 0.5rem;
+        }
+
+        .recommendation-box i {
+            color: #2ecc71;
+            font-size: 1.2rem;
+            margin-top: 0.2rem;
+        }
+
+        .recommendation-box strong {
+            color: #2ecc71;
+        }
+
+        /* Severity Section Styles */
+        .severity-section {
+            margin: 2rem 0;
+            padding: 1.5rem;
+            background: var(--card-bg);
+            border-radius: 10px;
+        }
+
+        .severity-section h3 {
+            color: var(--primary-color);
+            margin-bottom: 1rem;
+            font-size: 1.5rem;
+        }
+
+        .severity-card {
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 10px;
+            padding: 2rem;
+            border-left: 6px solid var(--primary-color);
+        }
+
+        .severity-card.severity-mild {
+            border-left-color: #4ecdc4;
+            background: rgba(78, 205, 196, 0.1);
+        }
+
+        .severity-card.severity-moderate {
+            border-left-color: #ffa500;
+            background: rgba(255, 165, 0, 0.1);
+        }
+
+        .severity-card.severity-severe {
+            border-left-color: #ff6b6b;
+            background: rgba(255, 107, 107, 0.1);
+        }
+
+        .severity-card.severity-critical {
+            border-left-color: #dc3545;
+            background: rgba(220, 53, 69, 0.15);
+        }
+
+        .severity-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1.5rem;
+            flex-wrap: wrap;
+            gap: 1rem;
+        }
+
+        .severity-score-display {
+            text-align: center;
+        }
+
+        .severity-value {
+            font-size: 3rem;
+            font-weight: bold;
+            color: var(--primary-color);
+            line-height: 1;
+        }
+
+        .severity-label {
+            color: #888;
+            font-size: 0.9rem;
+            margin-top: 0.5rem;
+        }
+
+        .severity-level-badge {
+            padding: 0.8rem 1.5rem;
+            border-radius: 25px;
+            font-size: 1.1rem;
+            font-weight: bold;
+            text-transform: uppercase;
+        }
+
+        .severity-level-badge.severity-mild {
+            background: rgba(78, 205, 196, 0.3);
+            color: #4ecdc4;
+        }
+
+        .severity-level-badge.severity-moderate {
+            background: rgba(255, 165, 0, 0.3);
+            color: #ffa500;
+        }
+
+        .severity-level-badge.severity-severe {
+            background: rgba(255, 107, 107, 0.3);
+            color: #ff6b6b;
+        }
+
+        .severity-level-badge.severity-critical {
+            background: rgba(220, 53, 69, 0.3);
+            color: #dc3545;
+        }
+
+        .severity-details {
+            margin-top: 1.5rem;
+        }
+
+        .severity-metrics {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .severity-progress {
+            margin-top: 1rem;
+        }
+
+        .progress-bar {
+            width: 100%;
+            height: 30px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 15px;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .progress-fill {
+            height: 100%;
+            transition: width 0.5s ease;
+            border-radius: 15px;
+        }
+
+        .progress-fill.severity-mild {
+            background: linear-gradient(90deg, #4ecdc4, #44a08d);
+        }
+
+        .progress-fill.severity-moderate {
+            background: linear-gradient(90deg, #ffa500, #ff8c00);
+        }
+
+        .progress-fill.severity-severe {
+            background: linear-gradient(90deg, #ff6b6b, #ee5a6f);
+        }
+
+        .progress-fill.severity-critical {
+            background: linear-gradient(90deg, #dc3545, #c82333);
+        }
+
+        /* Treatment Recommendations Styles */
+        .treatment-recommendations-section {
+            margin: 2rem 0;
+            padding: 1.5rem;
+            background: var(--card-bg);
+            border-radius: 10px;
+        }
+
+        .treatment-recommendations-section h3 {
+            color: var(--primary-color);
+            margin-bottom: 1rem;
+            font-size: 1.5rem;
+        }
+
+        .recommendation-card {
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 10px;
+            padding: 1.5rem;
+            margin-bottom: 1rem;
+            border-left: 4px solid var(--primary-color);
+        }
+
+        .recommendation-card.priority-critical {
+            border-left-color: #dc3545;
+            background: rgba(220, 53, 69, 0.1);
+        }
+
+        .recommendation-card.priority-high {
+            border-left-color: #ff6b6b;
+            background: rgba(255, 107, 107, 0.1);
+        }
+
+        .recommendation-card.priority-medium {
+            border-left-color: #ffa500;
+            background: rgba(255, 165, 0, 0.1);
+        }
+
+        .recommendation-card.priority-low {
+            border-left-color: #4ecdc4;
+            background: rgba(78, 205, 196, 0.1);
+        }
+
+        .recommendation-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1rem;
+            flex-wrap: wrap;
+            gap: 1rem;
+        }
+
+        .recommendation-header h4 {
+            color: var(--text-color);
+            margin: 0;
+            font-size: 1.3rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .priority-badge {
+            padding: 0.5rem 1rem;
+            border-radius: 20px;
+            font-size: 0.85rem;
+            font-weight: bold;
+            text-transform: uppercase;
+        }
+
+        .priority-badge.priority-critical {
+            background: rgba(220, 53, 69, 0.3);
+            color: #dc3545;
+        }
+
+        .priority-badge.priority-high {
+            background: rgba(255, 107, 107, 0.3);
+            color: #ff6b6b;
+        }
+
+        .priority-badge.priority-medium {
+            background: rgba(255, 165, 0, 0.3);
+            color: #ffa500;
+        }
+
+        .priority-badge.priority-low {
+            background: rgba(78, 205, 196, 0.3);
+            color: #4ecdc4;
+        }
+
+        .recommendation-content {
+            color: var(--text-color);
+            line-height: 1.6;
+        }
+
+        .recommendation-content p {
+            margin: 0.5rem 0;
+        }
+
+        .action-list, .medication-list {
+            margin: 1rem 0;
+            padding: 1rem;
+            background: rgba(0, 0, 0, 0.2);
+            border-radius: 8px;
+        }
+
+        .action-list ul, .medication-list ul {
+            margin: 0.5rem 0;
+            padding-left: 1.5rem;
+        }
+
+        .action-list li, .medication-list li {
+            margin: 0.3rem 0;
+        }
+
+        .duration-note {
+            margin-top: 0.5rem;
+            color: #888;
+            font-size: 0.9rem;
+        }
+
+        .note-box {
+            margin: 1rem 0;
+            padding: 1rem;
+            background: rgba(46, 204, 113, 0.1);
+            border-left: 4px solid #2ecc71;
+            border-radius: 5px;
+            display: flex;
+            align-items: flex-start;
+            gap: 0.5rem;
+        }
+
+        .note-box i {
+            color: #2ecc71;
+            margin-top: 0.2rem;
+        }
+
+        .isolation-warning {
+            margin: 1rem 0;
+            padding: 1rem;
+            background: rgba(220, 53, 69, 0.1);
+            border-left: 4px solid #dc3545;
+            border-radius: 5px;
+            display: flex;
+            align-items: flex-start;
+            gap: 0.5rem;
+        }
+
+        .isolation-warning i {
+            color: #dc3545;
+            margin-top: 0.2rem;
+        }
+
+        .disclaimer-box {
+            margin-top: 2rem;
+            padding: 1rem;
+            background: rgba(255, 193, 7, 0.1);
+            border-left: 4px solid #ffc107;
+            border-radius: 5px;
+            display: flex;
+            align-items: flex-start;
+            gap: 0.5rem;
+        }
+
+        .disclaimer-box i {
+            color: #ffc107;
+            margin-top: 0.2rem;
+        }
+
+        .disclaimer-box strong {
+            color: #ffc107;
+        }
     </style>
 </head>
 <body>
@@ -959,14 +1669,76 @@
         <div class="loading-text">Analyzing X-ray image...</div>
     </div>
 
-    <video autoplay muted loop id="myVideo" class="video-background">
+    <!-- Professional Animated Background (Video file is empty, using CSS animation) -->
+    <div class="animated-background" id="mainBackground"></div>
+    
+    <!-- Optional: Video background (will be used if valid video is added) -->
+    <video autoplay muted loop playsinline id="myVideo" class="video-background" preload="auto" style="display: none;">
         <source src="{{ url_for('static', filename='videos/lungs.mp4') }}" type="video/mp4">
-        Your browser does not support the video tag.
     </video>
     
+    <script>
+        // Create floating particles for extra visual appeal
+        document.addEventListener('DOMContentLoaded', function() {
+            const background = document.getElementById('mainBackground');
+            
+            // Create floating particles
+            for (let i = 0; i < 20; i++) {
+                const particle = document.createElement('div');
+                particle.className = 'particle';
+                const size = Math.random() * 4 + 2;
+                particle.style.width = size + 'px';
+                particle.style.height = size + 'px';
+                particle.style.left = Math.random() * 100 + '%';
+                particle.style.animationDelay = Math.random() * 15 + 's';
+                particle.style.animationDuration = (Math.random() * 10 + 10) + 's';
+                background.appendChild(particle);
+            }
+            
+            // Check if video file is valid (has content)
+            const video = document.getElementById('myVideo');
+            video.addEventListener('loadedmetadata', function() {
+                // Only show video if it has actual content (duration > 0)
+                if (video.duration > 0 && video.videoWidth > 0) {
+                    console.log('Valid video detected, switching to video background');
+                    video.style.display = 'block';
+                    background.style.display = 'none';
+                } else {
+                    console.log('Video file is empty or invalid, using animated background');
+                    video.style.display = 'none';
+                    background.style.display = 'block';
+                }
+            });
+            
+            video.addEventListener('error', function() {
+                console.log('Video failed to load, using animated background');
+                video.style.display = 'none';
+                background.style.display = 'block';
+            });
+            
+            // Check video after a short delay
+            setTimeout(function() {
+                if (video.readyState === 0 || video.duration === 0) {
+                    video.style.display = 'none';
+                    background.style.display = 'block';
+                }
+            }, 1000);
+        });
+    </script>
+    
     <div class="content-wrapper">
-    <h1>Pneumonia Detection</h1>
-    <div class="container">
+        <h1>Pneumonia Detection</h1>
+        
+        <nav class="main-nav">
+            <a href="/" class="nav-link active">
+                <i class="fas fa-home"></i> Home
+            </a>
+            <a href="/model_performance" class="nav-link">
+                <i class="fas fa-chart-line"></i> Model Performance
+            </a>
+        </nav>
+
+        <div class="container">
             <!-- Combined Patient Information and Upload Form -->
             <form action="/predict" method="POST" enctype="multipart/form-data" id="uploadForm">
                 <!-- Patient Information Section -->
@@ -1021,7 +1793,178 @@
                         <p><i class="fas fa-check-circle"></i> {{ result }}</p>
                 {% endif %}
                 
-                <img src="{{ image_url }}" alt="Uploaded Image" width="300">
+                <!-- Image Display with Toggle -->
+                <div class="image-visualization-container">
+                    <div class="image-toggle-buttons">
+                        <button class="toggle-btn active" onclick="showImage('original')">
+                            <i class="fas fa-image"></i> Original Image
+                        </button>
+                        <button class="toggle-btn" onclick="showImage('visualization')">
+                            <i class="fas fa-search-plus"></i> Detection Map
+                        </button>
+                    </div>
+                    <div class="image-wrapper">
+                        <img id="originalImage" src="{{ image_url }}" alt="Original X-ray Image" class="xray-image">
+                        {% if has_visualization %}
+                        <img id="visualizationImage" src="{{ visualization_url }}" alt="Detection Visualization" class="xray-image" style="display: none;">
+                        {% endif %}
+                    </div>
+                    {% if has_visualization %}
+                    <div class="visualization-legend">
+                        <div class="legend-item">
+                            <div class="legend-color" style="background: linear-gradient(to right, blue, red);"></div>
+                            <span>Heat Map: Red areas indicate higher model attention</span>
+                        </div>
+                    </div>
+                    {% endif %}
+                </div>
+
+                <!-- Detected Regions Explanation -->
+                {% if detected_regions and detected_regions|length > 0 %}
+                <div class="detected-regions-section">
+                    <h3><i class="fas fa-map-marker-alt"></i> Detected Regions Analysis</h3>
+                    <p class="section-description">The following areas were identified by the AI model as significant for the diagnosis:</p>
+                    {% for region in detected_regions %}
+                    <div class="region-card severity-{{ region.explanation.severity }}">
+                        <div class="region-header">
+                            <h4>
+                                <i class="fas fa-circle" style="color: {% if region.explanation.severity == 'high' %}#ff6b6b{% elif region.explanation.severity == 'moderate' %}#ffa500{% else %}#4ecdc4{% endif %};"></i>
+                                Region {{ region.id }}: {{ region.location }}
+                            </h4>
+                            <span class="severity-badge severity-{{ region.explanation.severity }}">
+                                {{ region.explanation.severity|title }} Priority
+                            </span>
+                        </div>
+                        <div class="region-details">
+                            <div class="region-metrics">
+                                <div class="metric">
+                                    <span class="metric-label">Detection Intensity:</span>
+                                    <span class="metric-value">{{ "%.1f"|format(region.intensity * 100) }}%</span>
+                                </div>
+                                <div class="metric">
+                                    <span class="metric-label">Area Size:</span>
+                                    <span class="metric-value">{{ region.area }} pixels</span>
+                                </div>
+                            </div>
+                            <div class="region-explanation">
+                                <p><strong>Why this area is marked:</strong></p>
+                                <p>{{ region.explanation.text }}</p>
+                                <div class="recommendation-box">
+                                    <i class="fas fa-lightbulb"></i>
+                                    <strong>Recommendation:</strong> {{ region.explanation.recommendation }}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% elif result == "Pneumonia Detected" %}
+                <div class="detected-regions-section">
+                    <div class="region-card">
+                        <p><i class="fas fa-info-circle"></i> The model detected signs of pneumonia, but detailed region analysis is not available. Please consult with a medical professional for detailed interpretation.</p>
+                    </div>
+                </div>
+                {% endif %}
+
+                <!-- Severity Score Section -->
+                {% if severity_score and severity_level %}
+                <div class="severity-section">
+                    <h3><i class="fas fa-exclamation-triangle"></i> Pneumonia Severity Assessment</h3>
+                    <div class="severity-card severity-{{ severity_level|lower }}">
+                        <div class="severity-header">
+                            <div class="severity-score-display">
+                                <div class="severity-value">{{ severity_score }}/100</div>
+                                <div class="severity-label">Severity Score</div>
+                            </div>
+                            <div class="severity-level-badge severity-{{ severity_level|lower }}">
+                                {{ severity_level|title }}
+                            </div>
+                        </div>
+                        <div class="severity-details">
+                            <div class="severity-metrics">
+                                <div class="metric">
+                                    <span class="metric-label">Opacity Percentage:</span>
+                                    <span class="metric-value">{{ opacity_percentage }}%</span>
+                                </div>
+                                <div class="metric">
+                                    <span class="metric-label">Affected Area:</span>
+                                    <span class="metric-value">{{ affected_area }} pixels</span>
+                                </div>
+                                <div class="metric">
+                                    <span class="metric-label">Detection Confidence:</span>
+                                    <span class="metric-value">{{ confidence }}%</span>
+                                </div>
+                            </div>
+                            <div class="severity-progress">
+                                <div class="progress-bar">
+                                    <div class="progress-fill severity-{{ severity_level|lower }}" style="width: {{ severity_score }}%"></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                {% endif %}
+
+                <!-- Treatment Recommendations Section -->
+                {% if treatment_recommendations and treatment_recommendations|length > 0 %}
+                <div class="treatment-recommendations-section">
+                    <h3><i class="fas fa-prescription-bottle-alt"></i> Treatment Recommendations</h3>
+                    <p class="section-description">Based on the severity assessment and clinical guidelines, the following recommendations are suggested:</p>
+                    {% for rec in treatment_recommendations %}
+                    <div class="recommendation-card priority-{{ rec.priority|lower }}">
+                        <div class="recommendation-header">
+                            <h4>
+                                <i class="fas fa-{% if rec.type == 'Immediate Action' %}exclamation-circle{% elif rec.type == 'Antibiotic Therapy' %}pills{% elif rec.type == 'Antiviral Therapy' %}virus{% else %}stethoscope{% endif %}"></i>
+                                {{ rec.type }}
+                            </h4>
+                            <span class="priority-badge priority-{{ rec.priority|lower }}">
+                                {{ rec.priority }} Priority
+                            </span>
+                        </div>
+                        <div class="recommendation-content">
+                            <p>{{ rec.description }}</p>
+                            {% if rec.actions %}
+                            <div class="action-list">
+                                <strong>Recommended Actions:</strong>
+                                <ul>
+                                    {% for action in rec.actions %}
+                                    <li>{{ action }}</li>
+                                    {% endfor %}
+                                </ul>
+                            </div>
+                            {% endif %}
+                            {% if rec.medications %}
+                            <div class="medication-list">
+                                <strong>Medications:</strong>
+                                <ul>
+                                    {% for med in rec.medications %}
+                                    <li>{{ med }}</li>
+                                    {% endfor %}
+                                </ul>
+                                {% if rec.duration %}
+                                <p class="duration-note"><i class="fas fa-clock"></i> Duration: {{ rec.duration }}</p>
+                                {% endif %}
+                            </div>
+                            {% endif %}
+                            {% if rec.note %}
+                            <div class="note-box">
+                                <i class="fas fa-info-circle"></i> {{ rec.note }}
+                            </div>
+                            {% endif %}
+                            {% if rec.isolation %}
+                            <div class="isolation-warning">
+                                <i class="fas fa-shield-virus"></i> <strong>Isolation Required:</strong> {{ rec.isolation }}
+                            </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                    {% endfor %}
+                    <div class="disclaimer-box">
+                        <i class="fas fa-exclamation-triangle"></i>
+                        <strong>Important:</strong> These recommendations are AI-generated suggestions and should be reviewed and validated by a qualified medical professional. Always consult with a healthcare provider for proper diagnosis and treatment.
+                    </div>
+                </div>
+                {% endif %}
                     
                     <!-- Patient Information Display -->
                     {% if show_patient_info and patient_info %}
@@ -1543,6 +2486,27 @@
         saveBtn.innerHTML = '<i class="fas fa-save"></i>Save Medical Data';
         saveBtn.onclick = saveMedicalData;
         document.querySelector('.annotation-tools').appendChild(saveBtn);
+
+        // Image Toggle Functionality
+        function showImage(type) {
+            const originalImg = document.getElementById('originalImage');
+            const visualizationImg = document.getElementById('visualizationImage');
+            const toggleButtons = document.querySelectorAll('.toggle-btn');
+            
+            if (!originalImg || !visualizationImg) return;
+            
+            toggleButtons.forEach(btn => btn.classList.remove('active'));
+            
+            if (type === 'original') {
+                originalImg.style.display = 'block';
+                visualizationImg.style.display = 'none';
+                toggleButtons[0].classList.add('active');
+            } else {
+                originalImg.style.display = 'none';
+                visualizationImg.style.display = 'block';
+                toggleButtons[1].classList.add('active');
+            }
+        }
     </script>
 </body>
 </html>

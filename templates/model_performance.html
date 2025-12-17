@@ -1,0 +1,107 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="content-wrapper">
+    <h1>Pneumonia Detection</h1>
+    
+    <nav class="main-nav">
+        <a href="/" class="nav-link">
+            <i class="fas fa-home"></i> Home
+        </a>
+        <a href="/model_performance" class="nav-link active">
+            <i class="fas fa-chart-line"></i> Model Performance
+        </a>
+    </nav>
+
+    <h2>Model Performance Metrics</h2>
+    
+    {% if error %}
+    <div class="alert alert-warning">
+        {{ error }}
+    </div>
+    {% else %}
+    <div class="metrics-container">
+        <div class="metric-box">
+            <h3>Performance Overview</h3>
+            <p>Based on {{ history_length }} predictions</p>
+            <ul>
+                <li>Accuracy: {{ metrics.accuracy }}%</li>
+                <li>Sensitivity (True Positive Rate): {{ metrics.sensitivity }}%</li>
+                <li>Specificity (True Negative Rate): {{ metrics.specificity }}%</li>
+                <li>Precision: {{ metrics.precision }}%</li>
+            </ul>
+        </div>
+        
+        <div class="confusion-matrix">
+            <h3>Confusion Matrix</h3>
+            <img src="{{ metrics.confusion_matrix }}" alt="Confusion Matrix" class="matrix-plot">
+            <div class="matrix-explanation">
+                <p><strong>How to read the confusion matrix:</strong></p>
+                <ul>
+                    <li>True Negatives (top-left): Correctly identified normal cases</li>
+                    <li>False Positives (top-right): Normal cases incorrectly identified as pneumonia</li>
+                    <li>False Negatives (bottom-left): Pneumonia cases incorrectly identified as normal</li>
+                    <li>True Positives (bottom-right): Correctly identified pneumonia cases</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+</div>
+
+<style>
+.metrics-container {
+    display: flex;
+    flex-direction: column;
+    gap: 2rem;
+    padding: 1rem;
+}
+
+.metric-box {
+    background: rgba(255, 255, 255, 0.1);
+    padding: 1.5rem;
+    border-radius: 10px;
+}
+
+.metric-box ul {
+    list-style: none;
+    padding: 0;
+}
+
+.metric-box li {
+    margin: 0.5rem 0;
+    font-size: 1.1rem;
+}
+
+.confusion-matrix {
+    background: rgba(255, 255, 255, 0.1);
+    padding: 1.5rem;
+    border-radius: 10px;
+}
+
+.matrix-plot {
+    width: 100%;
+    max-width: 500px;
+    height: auto;
+    margin: 1rem 0;
+}
+
+.matrix-explanation {
+    margin-top: 1rem;
+    font-size: 0.9rem;
+}
+
+.matrix-explanation ul {
+    list-style: disc;
+    padding-left: 1.5rem;
+}
+
+.alert {
+    background: rgba(255, 193, 7, 0.2);
+    color: #fff;
+    padding: 1rem;
+    border-radius: 5px;
+    margin: 1rem 0;
+}
+</style>
+{% endblock %} 

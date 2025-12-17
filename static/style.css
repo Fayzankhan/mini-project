@@ -15,13 +15,64 @@ h1 {
     margin-top: 50px;
 }
 
-.container {
-    background-color: rgba(0, 0, 0, 0.6);
-    padding: 30px;
+/* --- FINAL BULLETPROOF OVERFLOW FIX --- */
+html, body, *, *::before, *::after {
+    box-sizing: border-box !important;
+}
+
+.content-wrapper {
+    max-width: 500px;
+    margin: 2rem auto;
+    padding: 2rem 1rem;
+    background: rgba(28, 28, 45, 0.85);
     border-radius: 15px;
-    width: 70%;
-    margin: 0 auto;
-    text-align: center;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.2);
+    color: #fff;
+}
+
+.container, .patient-form {
+    width: 100%;
+    max-width: 100%;
+    margin: 0;
+    padding: 0;
+    background: none;
+    box-shadow: none;
+    border-radius: 0;
+}
+
+.patient-form label {
+    width: 100%;
+    display: block;
+    margin-bottom: 0.3rem;
+    color: #fff;
+}
+
+.patient-form input,
+.patient-form select,
+.patient-form textarea {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    margin-bottom: 1rem;
+    padding: 0.8rem;
+    border-radius: 8px;
+    border: 1px solid #444;
+    background: rgba(255,255,255,0.08);
+    color: #fff;
+    font-size: 1rem;
+    display: block;
+}
+
+.patient-form input[type="number"]::-webkit-inner-spin-button,
+.patient-form input[type="number"]::-webkit-outer-spin-button {
+    margin: 0;
+}
+
+@media (max-width: 700px) {
+    .content-wrapper {
+        max-width: 98vw;
+        padding: 1rem 0.5rem;
+    }
 }
 
 input[type="file"] {
@@ -66,3 +117,175 @@ footer {
     margin-top: 50px;
     font-size: 14px;
 }
+
+/* Global box-sizing for all elements */
+*, *::before, *::after {
+    box-sizing: border-box;
+}
+
+/* Responsive Medical Professional Tools section */
+.medical-features {
+    width: 100%;
+    max-width: 600px;
+    margin: 2rem auto;
+    background: rgba(28, 28, 45, 0.85);
+    border-radius: 15px;
+    padding: 2rem 1rem;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.2);
+    color: #fff;
+    overflow: hidden;
+}
+
+.annotation-tools {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1rem;
+    justify-content: center;
+    margin-bottom: 1rem;
+}
+
+.annotation-btn {
+    flex: 1 1 120px;
+    min-width: 120px;
+    max-width: 200px;
+    background: #00a8ff;
+    color: #fff;
+    border: none;
+    border-radius: 5px;
+    padding: 0.7rem 1rem;
+    font-size: 1rem;
+    cursor: pointer;
+    margin: 0.2rem 0;
+    transition: background 0.2s, box-shadow 0.2s;
+}
+
+.annotation-btn:hover {
+    background: #0097e6;
+}
+
+.image-container {
+    width: 100%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    margin-bottom: 1rem;
+}
+
+.annotated-image {
+    max-width: 100%;
+    height: auto;
+    border-radius: 10px;
+    display: block;
+}
+
+.medical-notes {
+    width: 100%;
+    margin-top: 1rem;
+}
+
+.medical-notes textarea {
+    width: 100%;
+    min-height: 100px;
+    padding: 0.8rem;
+    border-radius: 8px;
+    border: 1px solid #444;
+    background: rgba(255,255,255,0.08);
+    color: #fff;
+    resize: vertical;
+    font-size: 1rem;
+    box-sizing: border-box;
+}
+
+/* Strict responsive fix for all form fields and containers */
+input[type="text"],
+input[type="number"],
+select,
+textarea {
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+    padding: 0.8rem;
+    border-radius: 8px;
+    border: 1px solid #444;
+    background: rgba(255,255,255,0.08);
+    color: #fff;
+    margin-bottom: 1rem;
+    font-size: 1rem;
+    box-sizing: border-box;
+    display: block;
+    flex-shrink: 1;
+}
+
+/* Fix for flexbox children */
+.patient-form > * {
+    min-width: 0;
+}
+
+/* Remove double border on textarea in medical notes */
+.medical-notes textarea {
+    border: 1px solid #444;
+}
+
+/* Responsive for small screens */
+@media (max-width: 700px) {
+    .container, .patient-form {
+        max-width: 98vw;
+        padding: 1rem 0.5rem;
+    }
+    .medical-features {
+        max-width: 98vw;
+        padding: 1rem 0.5rem;
+    }
+    .annotation-tools {
+        flex-direction: column;
+        gap: 0.5rem;
+    }
+}
+
+/* --- BULLETPROOF FORM CONTAINER FIX --- */
+body, html {
+    overflow-x: hidden !important;
+}
+
+/* Navigation Styles */
+.main-nav {
+    display: flex;
+    justify-content: center;
+    gap: 1.5rem;
+    margin: 2rem 0;
+    padding: 1rem;
+    background: rgba(0, 0, 0, 0.2);
+    border-radius: 10px;
+    width: fit-content;
+    margin-left: auto;
+    margin-right: auto;
+}
+
+.nav-link {
+    color: #FFD700;
+    text-decoration: none;
+    padding: 0.8rem 1.5rem;
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.1);
+    transition: all 0.3s ease;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-weight: 500;
+}
+
+.nav-link i {
+    font-size: 1.1rem;
+}
+
+.nav-link:hover, .nav-link.active {
+    background: rgba(255, 215, 0, 0.2);
+    color: #fff;
+    transform: translateY(-2px);
+}
+
+.nav-link.active {
+    background: rgba(255, 215, 0, 0.3);
+    box-shadow: 0 2px 10px rgba(255, 215, 0, 0.2);
+}
+
