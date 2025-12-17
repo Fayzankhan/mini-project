@@ -1005,27 +1005,39 @@ def calculate_model_metrics(predictions, true_labels):
 
 @app.route("/model_performance")
 def model_performance():
-    # Load history from temporary storage
-    history = load_history()
-    
-    if not history:
+    try:
+        # Load history from temporary storage
+        history = load_history()
+        
+        if not history or len(history) < 2:
+            return render_template("model_performance.html", 
+                                 error="Insufficient prediction history available. Please perform at least 2 predictions to view model performance metrics.")
+        
+        # Extract predictions and true labels from history
+        predictions = []
+        true_labels = []
+        
+        for entry in history:
+            predictions.append(entry.get('confidence', 50) / 100)  # Convert confidence back to probability
+            result = entry.get('result', 'No Pneumonia')
+            true_labels.append(1 if result == "Pneumonia Detected" else 0)
+        
+        # Calculate metrics
+        if len(predictions) > 0:
+            metrics = calculate_model_metrics(np.array(predictions), np.array(true_labels))
+            
+            return render_template("model_performance.html", 
+                                 metrics=metrics,
+                                 history_length=len(history))
+        else:
+            return render_template("model_performance.html", 
+                                 error="No valid prediction data found.")
+    except Exception as e:
+        print(f"Error in model_performance: {e}")
+        import traceback
+        traceback.print_exc()
         return render_template("model_performance.html", 
-                             error="No prediction history available")
-    
-    # Extract predictions and true labels from history
-    predictions = []
-    true_labels = []
-    
-    for entry in history:
-        predictions.append(entry['confidence'] / 100)  # Convert confidence back to probability
-        true_labels.append(1 if entry['result'] == "Pneumonia Detected" else 0)
-    
-    # Calculate metrics
-    metrics = calculate_model_metrics(np.array(predictions), np.array(true_labels))
-    
-    return render_template("model_performance.html", 
-                         metrics=metrics,
-                         history_length=len(history))
+                             error=f"Error loading performance metrics: {str(e)}")
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 8080)))
