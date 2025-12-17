@@ -70,35 +70,58 @@ use_lstm = False  # Flag to track which model is being used
 def load_model_on_demand():
     global model, use_lstm
     if model is None:
+        print(f"Attempting to load model. BASE_DIR: {BASE_DIR}")
+        
         # Try LSTM model first
         if os.path.exists(MODEL_PATH):
             try:
-                model = tf.keras.models.load_model(MODEL_PATH)
+                print(f"Trying to load LSTM model from {MODEL_PATH}")
+                model = tf.keras.models.load_model(MODEL_PATH, compile=False)
                 use_lstm = True
-                print(f"Loaded LSTM model from {MODEL_PATH}")
+                print(f"✓ Successfully loaded LSTM model from {MODEL_PATH}")
                 return model
             except Exception as e:
-                print(f"Error loading LSTM model: {e}. Trying fallback model...")
+                print(f"✗ Error loading LSTM model: {e}")
+                import traceback
+                traceback.print_exc()
         
-        # Try fallback model
+        # Try fallback model (main model - 12MB)
         if os.path.exists(FALLBACK_MODEL_PATH):
             try:
-                model = tf.keras.models.load_model(FALLBACK_MODEL_PATH)
-                use_lstm = False
-                print(f"Loaded fallback model from {FALLBACK_MODEL_PATH}")
-                return model
+                print(f"Trying to load fallback model from {FALLBACK_MODEL_PATH}")
+                # Check file size first
+                file_size = os.path.getsize(FALLBACK_MODEL_PATH)
+                print(f"Model file size: {file_size} bytes ({file_size / (1024*1024):.2f} MB)")
+                if file_size < 1024:  # Less than 1KB is suspicious
+                    print(f"WARNING: Model file seems too small ({file_size} bytes). Skipping.")
+                else:
+                    model = tf.keras.models.load_model(FALLBACK_MODEL_PATH, compile=False)
+                    use_lstm = False
+                    print(f"✓ Successfully loaded fallback model from {FALLBACK_MODEL_PATH}")
+                    return model
             except Exception as e:
-                print(f"Error loading fallback model: {e}. Trying alternate path...")
+                print(f"✗ Error loading fallback model: {e}")
+                import traceback
+                traceback.print_exc()
         
-        # Try alternate path (with typo)
+        # Try alternate path (with typo) - but skip if it's a Python script
         if os.path.exists(FALLBACK_MODEL_PATH_ALT):
             try:
-                model = tf.keras.models.load_model(FALLBACK_MODEL_PATH_ALT)
-                use_lstm = False
-                print(f"Loaded fallback model from {FALLBACK_MODEL_PATH_ALT}")
-                return model
+                file_size = os.path.getsize(FALLBACK_MODEL_PATH_ALT)
+                print(f"Alternate model file size: {file_size} bytes")
+                # Skip if file is too small (likely not a real model)
+                if file_size > 1024 * 1024:  # Only try if > 1MB
+                    print(f"Trying to load alternate model from {FALLBACK_MODEL_PATH_ALT}")
+                    model = tf.keras.models.load_model(FALLBACK_MODEL_PATH_ALT, compile=False)
+                    use_lstm = False
+                    print(f"✓ Successfully loaded alternate model from {FALLBACK_MODEL_PATH_ALT}")
+                    return model
+                else:
+                    print(f"Skipping {FALLBACK_MODEL_PATH_ALT} - file too small ({file_size} bytes), likely not a model")
             except Exception as e:
-                print(f"Error loading alternate model: {e}")
+                print(f"✗ Error loading alternate model: {e}")
+                import traceback
+                traceback.print_exc()
         
         # If no model found, raise error with helpful message
         print("=" * 80)
