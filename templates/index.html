@@ -2411,13 +2411,38 @@
             document.getElementById('loadingContainer').style.display = 'flex';
         });
 
-        // Feedback Form
-        document.getElementById('feedbackForm').addEventListener('submit', function(e) {
-            e.preventDefault();
-            // Here you would typically send the feedback to your server
-            alert('Thank you for your feedback!');
-            this.reset();
-        });
+        // Feedback Form - Professional submission
+        const feedbackForm = document.getElementById('feedbackForm');
+        if (feedbackForm) {
+            feedbackForm.addEventListener('submit', function(e) {
+                e.preventDefault();
+                
+                const formData = {
+                    name: this.querySelector('input[type="text"]').value,
+                    email: this.querySelector('input[type="email"]').value,
+                    feedback: this.querySelector('textarea').value
+                };
+                
+                // Send feedback to server
+                fetch('/submit_feedback', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(formData)
+                })
+                .then(response => response.json())
+                .then(data => {
+                    showModal('Feedback Submitted', 
+                        'Thank you for your feedback! We appreciate your input and will use it to improve our services.');
+                    this.reset();
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    showModal('Error', 'There was an error submitting your feedback. Please try again later.');
+                });
+            });
+        }
 
         // Footer Links - Professional Modal Dialogs
         document.getElementById('aboutLink').addEventListener('click', function(e) {
