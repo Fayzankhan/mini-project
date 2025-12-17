@@ -28,9 +28,10 @@ app = Flask(__name__)
 
 # Create directories for file storage
 # Use environment variable for production (Render), temp dir for local
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
 if os.getenv('RENDER'):
     # Production: Use persistent storage
-    BASE_DIR = os.path.dirname(os.path.abspath(__file__))
     UPLOAD_FOLDER = os.path.join(BASE_DIR, "static", "uploads")
     REPORTS_FOLDER = os.path.join(BASE_DIR, "static", "reports")
     HISTORY_FILE = os.path.join(BASE_DIR, "static", "history.json")
@@ -59,10 +60,9 @@ if not os.path.exists(PATIENTS_FILE):
         json.dump([], f)
 
 # Load model - Use absolute paths that work in both local and Render
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 MODEL_PATH = os.path.join(BASE_DIR, "saved_model", "pneumonia_detector_lstm.h5")
 FALLBACK_MODEL_PATH = os.path.join(BASE_DIR, "saved_model", "pneumonia_detector.h5")
-# Also check for typo in filename
+# Also check for typo in filename (but this file is likely corrupted - only 360 bytes)
 FALLBACK_MODEL_PATH_ALT = os.path.join(BASE_DIR, "saved_model", "prenumonia_detector.h5")
 model = None  # Initialize model as None
 use_lstm = False  # Flag to track which model is being used
