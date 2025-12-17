@@ -2612,7 +2612,7 @@
             document.head.appendChild(style);
         }
 
-        // Mode Switching
+        // Mode Switching - Enhanced with smooth transitions
         const patientMode = document.getElementById('patientMode');
         const medicalMode = document.getElementById('medicalMode');
         const patientForm = document.getElementById('patientForm');
@@ -2620,23 +2620,43 @@
         const emergencyWarning = document.getElementById('emergencyWarning');
 
         function switchMode(mode) {
-            if (mode === 'patient') {
-                patientMode.classList.add('active');
-                medicalMode.classList.remove('active');
-                patientForm.classList.add('active');
-                medicalFeatures.classList.remove('active');
-                document.getElementById('uploadForm').style.display = 'block';
-            } else {
-                patientMode.classList.remove('active');
-                medicalMode.classList.add('active');
-                patientForm.classList.remove('active');
-                medicalFeatures.classList.add('active');
-                document.getElementById('uploadForm').style.display = 'none';
+            // Add smooth transition effect
+            const contentWrapper = document.querySelector('.content-wrapper');
+            if (contentWrapper) {
+                contentWrapper.style.opacity = '0.7';
+                contentWrapper.style.transition = 'opacity 0.3s ease';
             }
+
+            setTimeout(() => {
+                if (mode === 'patient') {
+                    patientMode.classList.add('active');
+                    medicalMode.classList.remove('active');
+                    patientForm.classList.add('active');
+                    medicalFeatures.classList.remove('active');
+                    const uploadForm = document.getElementById('uploadForm');
+                    if (uploadForm) uploadForm.style.display = 'block';
+                } else {
+                    patientMode.classList.remove('active');
+                    medicalMode.classList.add('active');
+                    patientForm.classList.remove('active');
+                    medicalFeatures.classList.add('active');
+                    const uploadForm = document.getElementById('uploadForm');
+                    if (uploadForm) uploadForm.style.display = 'none';
+                }
+
+                // Restore opacity
+                if (contentWrapper) {
+                    contentWrapper.style.opacity = '1';
+                }
+            }, 150);
         }
 
-        patientMode.addEventListener('click', () => switchMode('patient'));
-        medicalMode.addEventListener('click', () => switchMode('medical'));
+        if (patientMode) {
+            patientMode.addEventListener('click', () => switchMode('patient'));
+        }
+        if (medicalMode) {
+            medicalMode.addEventListener('click', () => switchMode('medical'));
+        }
 
         // Show emergency warning for high confidence pneumonia detection
         {% if result == "Pneumonia Detected" and confidence > 80 %}
