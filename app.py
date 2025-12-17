@@ -768,13 +768,36 @@ def predict():
 def serve_visualization(filename):
     """Serve visualization images"""
     try:
+        # Sanitize filename to prevent directory traversal
+        filename = os.path.basename(filename)
         vis_path = os.path.join(UPLOAD_FOLDER, filename)
+        print(f"Serving image from: {vis_path}")
+        print(f"UPLOAD_FOLDER: {UPLOAD_FOLDER}")
+        print(f"File exists: {os.path.exists(vis_path)}")
+        
         if os.path.exists(vis_path):
-            return send_file(vis_path, mimetype='image/jpeg')
-        return "Image not found", 404
+            # Determine mimetype based on file extension
+            if filename.lower().endswith('.png'):
+                mimetype = 'image/png'
+            elif filename.lower().endswith('.jpg') or filename.lower().endswith('.jpeg'):
+                mimetype = 'image/jpeg'
+            else:
+                mimetype = 'image/jpeg'  # Default
+            print(f"Serving with mimetype: {mimetype}")
+            return send_file(vis_path, mimetype=mimetype)
+        else:
+            print(f"Image not found at: {vis_path}")
+            if os.path.exists(UPLOAD_FOLDER):
+                files = os.listdir(UPLOAD_FOLDER)
+                print(f"Files in folder ({len(files)}): {files[:10]}")  # Show first 10
+            else:
+                print(f"UPLOAD_FOLDER does not exist: {UPLOAD_FOLDER}")
+            return "Image not found", 404
     except Exception as e:
         print(f"Error serving visualization: {e}")
-        return "Error loading image", 500
+        import traceback
+        traceback.print_exc()
+        return f"Error loading image: {str(e)}", 500
 
 @app.route("/static/reports/<filename>")
 def serve_report_file(filename):
