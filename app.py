@@ -439,7 +439,10 @@ def preprocess_image(image_path, num_frames=4):
 
 @app.route("/", methods=["GET"])
 def home():
-    history = load_history()
+    try:
+        history = load_history()
+    except:
+        history = []
     return render_template("index.html", history=history)
 
 @app.route("/api/predict", methods=["POST"])
@@ -684,10 +687,29 @@ def predict():
 @app.route("/visualization/<filename>")
 def serve_visualization(filename):
     """Serve visualization images"""
-    vis_path = os.path.join(UPLOAD_FOLDER, filename)
-    if os.path.exists(vis_path):
-        return send_file(vis_path, mimetype='image/jpeg')
-    return "Image not found", 404
+    try:
+        vis_path = os.path.join(UPLOAD_FOLDER, filename)
+        if os.path.exists(vis_path):
+            return send_file(vis_path, mimetype='image/jpeg')
+        return "Image not found", 404
+    except Exception as e:
+        print(f"Error serving visualization: {e}")
+        return "Error loading image", 500
+
+@app.route("/static/reports/<filename>")
+def serve_report_file(filename):
+    """Serve report files like confusion matrix"""
+    try:
+        file_path = os.path.join(REPORTS_FOLDER, filename)
+        if os.path.exists(file_path):
+            if filename.endswith('.png'):
+                return send_file(file_path, mimetype='image/png')
+            elif filename.endswith('.pdf'):
+                return send_file(file_path, mimetype='application/pdf')
+        return "File not found", 404
+    except Exception as e:
+        print(f"Error serving report file: {e}")
+        return "Error loading file", 500
 
 @app.route("/download_report")
 def download_report():
@@ -932,38 +954,54 @@ def save_annotation():
 
 def calculate_model_metrics(predictions, true_labels):
     """Calculate and visualize model performance metrics"""
-    # Convert predictions to binary (0 or 1)
-    pred_binary = (predictions > 0.5).astype(int)
-    
-    # Calculate confusion matrix
-    cm = confusion_matrix(true_labels, pred_binary)
-    
-    # Create confusion matrix plot
-    plt.figure(figsize=(10, 8))
-    sns.heatmap(cm, annot=True, fmt='d', cmap='Blues')
-    plt.title('Confusion Matrix')
-    plt.ylabel('True Label')
-    plt.xlabel('Predicted Label')
-    
-    # Save plot to temporary directory
-    plot_path = os.path.join(REPORTS_FOLDER, 'confusion_matrix.png')
-    plt.savefig(plot_path)
-    plt.close()
-    
-    # Calculate metrics
-    tn, fp, fn, tp = cm.ravel()
-    accuracy = (tp + tn) / (tp + tn + fp + fn)
-    sensitivity = tp / (tp + fn) if (tp + fn) > 0 else 0
-    specificity = tn / (tn + fp) if (tn + fp) > 0 else 0
-    precision = tp / (tp + fp) if (tp + fp) > 0 else 0
-    
-    return {
-        'confusion_matrix': plot_path,
-        'accuracy': round(accuracy * 100, 2),
-        'sensitivity': round(sensitivity * 100, 2),
-        'specificity': round(specificity * 100, 2),
-        'precision': round(precision * 100, 2)
-    }
+    try:
+        # Convert predictions to binary (0 or 1)
+        pred_binary = (predictions > 0.5).astype(int)
+        
+        # Calculate confusion matrix
+        cm = confusion_matrix(true_labels, pred_binary)
+        
+        # Create confusion matrix plot
+        plt.figure(figsize=(10, 8))
+        sns.heatmap(cm, annot=True, fmt='d', cmap='Blues', cbar_kws={'label': 'Count'})
+        plt.title('Confusion Matrix', fontsize=16, fontweight='bold')
+        plt.ylabel('True Label', fontsize=12)
+        plt.xlabel('Predicted Label', fontsize=12)
+        plt.tight_layout()
+        
+        # Save plot to temporary directory
+        plot_path = os.path.join(REPORTS_FOLDER, 'confusion_matrix.png')
+        plt.savefig(plot_path, dpi=150, bbox_inches='tight')
+        plt.close()
+        
+        # Calculate metrics
+        tn, fp, fn, tp = cm.ravel()
+        accuracy = (tp + tn) / (tp + tn + fp + fn) if (tp + tn + fp + fn) > 0 else 0
+        sensitivity = tp / (tp + fn) if (tp + fn) > 0 else 0
+        specificity = tn / (tn + fp) if (tn + fp) > 0 else 0
+        precision = tp / (tp + fp) if (tp + fp) > 0 else 0
+        
+        # Serve the image via Flask route
+        plot_url = f"/static/reports/confusion_matrix.png"
+        
+        return {
+            'confusion_matrix': plot_url,
+            'accuracy': round(accuracy * 100, 2),
+            'sensitivity': round(sensitivity * 100, 2),
+            'specificity': round(specificity * 100, 2),
+            'precision': round(precision * 100, 2)
+        }
+    except Exception as e:
+        print(f"Error calculating metrics: {e}")
+        import traceback
+        traceback.print_exc()
+        return {
+            'confusion_matrix': '',
+            'accuracy': 0,
+            'sensitivity': 0,
+            'specificity': 0,
+            'precision': 0
+        }
 
 @app.route("/model_performance")
 def model_performance():

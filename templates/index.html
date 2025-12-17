@@ -520,40 +520,6 @@
             --hover-color: rgba(0, 168, 255, 0.1);
         }
 
-        [data-theme="light"] {
-            --primary-color: #2c3e50;
-            --secondary-color: #34495e;
-            --background-color: rgba(255, 255, 255, 0.95);
-            --text-color: #333;
-            --card-bg: rgba(0, 0, 0, 0.05);
-            --border-color: rgba(0, 0, 0, 0.2);
-            --hover-color: rgba(44, 62, 80, 0.1);
-        }
-
-        /* Theme Toggle Button */
-        .theme-toggle {
-            position: fixed;
-            top: 20px;
-            right: 20px;
-            background: var(--primary-color);
-            border: none;
-            border-radius: 50%;
-            width: 40px;
-            height: 40px;
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: white;
-            font-size: 1.2rem;
-            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
-            z-index: 1000;
-            transition: all 0.3s ease;
-        }
-
-        .theme-toggle:hover {
-            transform: scale(1.1);
-        }
 
         /* History Section */
         .history-section {
@@ -885,13 +851,6 @@
                 font-size: 0.85rem;
             }
 
-            /* Theme toggle */
-            .theme-toggle {
-                top: 10px;
-                right: 10px;
-                width: 35px;
-                height: 35px;
-            }
 
             /* Navigation */
             .main-nav {
@@ -1869,9 +1828,6 @@
         </button>
     </div>
 
-    <button class="theme-toggle" id="themeToggle">
-        <i class="fas fa-moon"></i>
-    </button>
 
     <div class="loading-container" id="loadingContainer">
         <div class="loading-spinner"></div>
@@ -2421,26 +2377,6 @@
     </footer>
 
     <script>
-        // Theme Toggle
-        const themeToggle = document.getElementById('themeToggle');
-        const body = document.body;
-        
-        // Check for saved theme preference
-        const savedTheme = localStorage.getItem('theme');
-        if (savedTheme) {
-            body.setAttribute('data-theme', savedTheme);
-            themeToggle.innerHTML = savedTheme === 'light' ? '<i class="fas fa-moon"></i>' : '<i class="fas fa-sun"></i>';
-        }
-
-        themeToggle.addEventListener('click', () => {
-            const currentTheme = body.getAttribute('data-theme');
-            const newTheme = currentTheme === 'light' ? 'dark' : 'light';
-            
-            body.setAttribute('data-theme', newTheme);
-            localStorage.setItem('theme', newTheme);
-            themeToggle.innerHTML = newTheme === 'light' ? '<i class="fas fa-moon"></i>' : '<i class="fas fa-sun"></i>';
-        });
-
         // FAQ Toggle
         document.querySelectorAll('.faq-question').forEach(question => {
             question.addEventListener('click', () => {
@@ -2483,21 +2419,111 @@
             this.reset();
         });
 
-        // Footer Links
+        // Footer Links - Professional Modal Dialogs
         document.getElementById('aboutLink').addEventListener('click', function(e) {
             e.preventDefault();
-            alert('This application uses advanced AI to detect pneumonia in chest X-ray images. It is designed to assist medical professionals in their diagnostic process.');
+            showModal('About the Application', 
+                'This application uses advanced AI and deep learning models to detect pneumonia in chest X-ray images. ' +
+                'It is designed to assist medical professionals in their diagnostic process by providing rapid, ' +
+                'accurate analysis with detailed visualizations and comprehensive reports. The system utilizes ' +
+                'state-of-the-art CNN-LSTM hybrid architectures for enhanced accuracy and explainability.');
         });
 
         document.getElementById('howItWorksLink').addEventListener('click', function(e) {
             e.preventDefault();
-            alert('1. Upload a chest X-ray image\n2. Our AI model analyzes the image\n3. Get detailed results with confidence scores\n4. Download a comprehensive report');
+            showModal('How It Works', 
+                '<strong>Step 1:</strong> Upload a chest X-ray image (JPG, PNG, or DICOM format)<br><br>' +
+                '<strong>Step 2:</strong> Our AI model analyzes the image using advanced deep learning algorithms<br><br>' +
+                '<strong>Step 3:</strong> Get detailed results with confidence scores, severity assessment, and detected regions<br><br>' +
+                '<strong>Step 4:</strong> Download a comprehensive PDF report with all findings and recommendations');
         });
 
         document.getElementById('contactLink').addEventListener('click', function(e) {
             e.preventDefault();
-            alert('For support, please contact us at support@pneumoniadetection.com');
+            showModal('Contact Support', 
+                'For technical support, questions, or feedback, please contact us:<br><br>' +
+                '<strong>Email:</strong> support@pneumoniadetection.com<br>' +
+                '<strong>Response Time:</strong> Within 24-48 hours<br><br>' +
+                'We are committed to providing excellent support and continuously improving our services.');
         });
+
+        // Professional Modal Function
+        function showModal(title, content) {
+            // Remove existing modal if any
+            const existingModal = document.getElementById('infoModal');
+            if (existingModal) {
+                existingModal.remove();
+            }
+
+            // Create modal
+            const modal = document.createElement('div');
+            modal.id = 'infoModal';
+            modal.style.cssText = `
+                position: fixed;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+                background: rgba(0, 0, 0, 0.8);
+                display: flex;
+                justify-content: center;
+                align-items: center;
+                z-index: 10000;
+                animation: fadeIn 0.3s ease;
+            `;
+
+            const modalContent = document.createElement('div');
+            modalContent.style.cssText = `
+                background: rgba(28, 28, 45, 0.98);
+                padding: 2rem;
+                border-radius: 15px;
+                max-width: 600px;
+                width: 90%;
+                max-height: 80vh;
+                overflow-y: auto;
+                box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+                border: 1px solid rgba(255, 255, 255, 0.1);
+            `;
+
+            modalContent.innerHTML = `
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
+                    <h2 style="color: #00a8ff; margin: 0; font-size: 1.5rem;">${title}</h2>
+                    <button id="closeModal" style="background: none; border: none; color: #fff; font-size: 1.5rem; cursor: pointer; padding: 0; width: 30px; height: 30px; display: flex; align-items: center; justify-content: center;">&times;</button>
+                </div>
+                <div style="color: #fff; line-height: 1.6; font-size: 1rem;">${content}</div>
+            `;
+
+            modal.appendChild(modalContent);
+            document.body.appendChild(modal);
+
+            // Close button functionality
+            document.getElementById('closeModal').addEventListener('click', () => {
+                modal.style.animation = 'fadeOut 0.3s ease';
+                setTimeout(() => modal.remove(), 300);
+            });
+
+            // Close on background click
+            modal.addEventListener('click', (e) => {
+                if (e.target === modal) {
+                    modal.style.animation = 'fadeOut 0.3s ease';
+                    setTimeout(() => modal.remove(), 300);
+                }
+            });
+
+            // Add animations
+            const style = document.createElement('style');
+            style.textContent = `
+                @keyframes fadeIn {
+                    from { opacity: 0; }
+                    to { opacity: 1; }
+                }
+                @keyframes fadeOut {
+                    from { opacity: 1; }
+                    to { opacity: 0; }
+                }
+            `;
+            document.head.appendChild(style);
+        }
 
         // Mode Switching
         const patientMode = document.getElementById('patientMode');
