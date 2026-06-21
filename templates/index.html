@@ -383,8 +383,26 @@
 
         .loading-text {
             color: white;
-            margin-top: 20px;
-            font-size: 1.2rem;
+            margin-top: 1rem;
+            font-size: 1.1rem;
+            text-align: center;
+            max-width: 420px;
+            padding: 0 1rem;
+        }
+
+        .error-alert {
+            background: rgba(220, 53, 69, 0.15);
+            border: 1px solid #dc3545;
+            color: #ffb3b3;
+            padding: 1rem 1.25rem;
+            border-radius: 12px;
+            margin: 1rem 0 1.5rem;
+            line-height: 1.5;
+        }
+
+        .error-alert i {
+            color: #ff6b6b;
+            margin-right: 0.5rem;
         }
 
         /* Enhanced Result Card */
@@ -1893,7 +1911,7 @@
 
     <div class="loading-container" id="loadingContainer">
         <div class="loading-spinner"></div>
-        <div class="loading-text">Analyzing X-ray image...</div>
+        <div class="loading-text">Analyzing X-ray image... This can take up to 2 minutes on first upload after the app wakes up.</div>
     </div>
 
     <!-- Professional Animated Background (Video file is empty, using CSS animation) -->
@@ -2004,6 +2022,13 @@
                     <i class="fas fa-upload"></i>Upload and Predict
                 </button>
             </form>
+
+            {% if error %}
+            <div class="error-alert">
+                <i class="fas fa-exclamation-circle"></i>
+                <strong>Analysis failed:</strong> {{ error }}
+            </div>
+            {% endif %}
 
             <!-- Emergency Warning -->
             <div class="emergency-warning" id="emergencyWarning">

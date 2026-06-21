@@ -1,8 +1,13 @@
 from flask import Flask, render_template, request, send_file, jsonify
+import os
+
+# Reduce TensorFlow log noise and memory pressure on small hosts (e.g. Render free tier)
+os.environ.setdefault('TF_CPP_MIN_LOG_LEVEL', '2')
+os.environ.setdefault('TF_ENABLE_ONEDNN_OPTS', '0')
+
 import tensorflow as tf
 import numpy as np
 import cv2
-import os
 from fpdf import FPDF
 from datetime import datetime
 from skimage import metrics
@@ -12,6 +17,13 @@ import uuid
 import matplotlib.pyplot as plt
 from sklearn.metrics import confusion_matrix, classification_report
 import seaborn as sns
+
+# Keep TensorFlow thread usage modest on 512MB instances
+try:
+    tf.config.threading.set_intra_op_parallelism_threads(1)
+    tf.config.threading.set_inter_op_parallelism_threads(1)
+except Exception:
+    pass
 
 # Import advanced features
 try:
@@ -29,9 +41,12 @@ app = Flask(__name__)
 # Create directories for file storage
 # Use environment variable for production (Render), temp dir for local
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+IS_PRODUCTION = bool(
+    os.getenv('RENDER') or os.getenv('K_SERVICE') or os.getenv('RENDER_EXTERNAL_URL')
+)
 
-if os.getenv('RENDER'):
-    # Production: Use persistent storage
+if IS_PRODUCTION:
+    # Production (Render / Cloud Run): use project static folders
     UPLOAD_FOLDER = os.path.join(BASE_DIR, "static", "uploads")
     REPORTS_FOLDER = os.path.join(BASE_DIR, "static", "reports")
     HISTORY_FILE = os.path.join(BASE_DIR, "static", "history.json")
@@ -166,6 +181,75 @@ def save_patients(patients):
     with open(PATIENTS_FILE, 'w') as f:
         json.dump(patients, f)
 
+def sanitize_pdf_text(text):
+    """Ensure text is safe for FPDF latin-1 encoding."""
+    if text is None:
+        return ""
+    text = str(text)
+    for old, new in [
+        ('\u2022', '-'), ('\u2013', '-'), ('\u2014', '-'),
+        ('\u2018', "'"), ('\u2019', "'"), ('\u201c', '"'), ('\u201d', '"'),
+        ('\u2026', '...'),
+    ]:
+        text = text.replace(old, new)
+    return text.encode('latin-1', 'replace').decode('latin-1')
+
+def to_json_safe(value):
+    """Convert numpy and other non-JSON types to native Python."""
+    if isinstance(value, dict):
+        return {k: to_json_safe(v) for k, v in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [to_json_safe(v) for v in value]
+    if isinstance(value, np.generic):
+        return value.item()
+    if isinstance(value, np.ndarray):
+        return value.tolist()
+    return value
+
+def save_analysis_data(analysis_data):
+    os.makedirs(REPORTS_FOLDER, exist_ok=True)
+    safe_data = to_json_safe(analysis_data)
+    json_path = os.path.join(REPORTS_FOLDER, "latest_analysis.json")
+    tmp_path = json_path + ".tmp"
+    with open(tmp_path, 'w') as f:
+        json.dump(safe_data, f, indent=2)
+    os.replace(tmp_path, json_path)
+    with open(os.path.join(REPORTS_FOLDER, "latest_analysis.txt"), "w") as f:
+        for key, value in safe_data.items():
+            if isinstance(value, (dict, list)):
+                value = json.dumps(value)
+            f.write(f"{key}:{value}\n")
+
+def _load_analysis_from_txt(txt_path):
+    analysis_data = {}
+    with open(txt_path, 'r') as f:
+        for line in f:
+            line = line.strip()
+            if not line or ':' not in line:
+                continue
+            key, value = line.split(':', 1)
+            if key in ('patient_info', 'detected_regions', 'treatment_recommendations'):
+                try:
+                    analysis_data[key] = json.loads(value)
+                except json.JSONDecodeError:
+                    analysis_data[key] = value
+            else:
+                analysis_data[key] = value
+    return analysis_data
+
+def load_analysis_data():
+    json_path = os.path.join(REPORTS_FOLDER, "latest_analysis.json")
+    txt_path = os.path.join(REPORTS_FOLDER, "latest_analysis.txt")
+    if os.path.exists(json_path):
+        try:
+            with open(json_path, 'r') as f:
+                return json.load(f)
+        except json.JSONDecodeError:
+            print("Warning: corrupt analysis JSON, falling back to text file")
+    if os.path.exists(txt_path):
+        return _load_analysis_from_txt(txt_path)
+    raise FileNotFoundError("No analysis data found")
+
 def calculate_image_quality(image):
     """Calculate image quality score based on various metrics"""
     # Convert to grayscale if needed
@@ -294,6 +378,9 @@ def make_gradcam_heatmap(img_array, model, last_conv_layer_name=None, pred_index
         # with respect to the activations of the last conv layer
         with tf.GradientTape() as tape:
             conv_outputs, predictions = grad_model(img_array)
+            if isinstance(predictions, (list, tuple)):
+                predictions = predictions[0]
+            predictions = tf.convert_to_tensor(predictions)
             if len(predictions.shape) > 1:
                 pred = predictions[:, pred_index]
             else:
@@ -460,29 +547,47 @@ def get_recommendation(severity):
     else:
         return "Routine follow-up as per standard clinical protocol."
 
+def create_detection_map(img_path, regions):
+    """Draw bounding boxes on the original image for detected regions."""
+    detection_map = cv2.imread(img_path)
+    if detection_map is None:
+        return None
+    for region in regions:
+        x, y, w, h = region['bbox']
+        cv2.rectangle(detection_map, (x, y), (x + w, y + h), (0, 255, 0), 2)
+        label = f"R{region['id']}: {region.get('location', 'Region')}"
+        cv2.putText(detection_map, label, (x, max(y - 8, 15)),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.45, (0, 255, 0), 1, cv2.LINE_AA)
+    return detection_map
+
 def create_visualization_with_explanations(img_path, model, prediction, confidence):
     """Create complete visualization with marked regions and explanations"""
-    # Preprocess image
     img_array = preprocess_image(img_path)
-    
-    # Generate heatmap
     heatmap, layer_name = make_gradcam_heatmap(img_array, model)
-    
+
     if heatmap is None:
-        return None, None, []
-    
-    # Overlay heatmap on original image
+        return None, None, [], None, None
+
     overlayed_img, heatmap_resized = overlay_heatmap_on_image(img_path, heatmap)
-    
-    # Identify detected regions
     regions = identify_detected_regions(heatmap_resized / 255.0)
-    
-    # Save visualization
-    vis_filename = f"visualization_{datetime.now().strftime('%Y%m%d_%H%M%S')}.jpg"
-    vis_path = os.path.join(UPLOAD_FOLDER, vis_filename)
+
+    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+    vis_path = os.path.join(UPLOAD_FOLDER, f"visualization_{timestamp}.jpg")
+    heatmap_path = os.path.join(UPLOAD_FOLDER, f"heatmap_{timestamp}.jpg")
+    detection_path = os.path.join(UPLOAD_FOLDER, f"detection_map_{timestamp}.jpg")
+
     cv2.imwrite(vis_path, overlayed_img)
-    
-    return vis_path, heatmap, regions
+
+    heatmap_colored = cv2.applyColorMap(heatmap_resized, cv2.COLORMAP_JET)
+    cv2.imwrite(heatmap_path, heatmap_colored)
+
+    detection_map = create_detection_map(img_path, regions)
+    if detection_map is not None:
+        cv2.imwrite(detection_path, detection_map)
+    else:
+        detection_path = None
+
+    return vis_path, heatmap, regions, heatmap_path, detection_path
 
 # Function to preprocess image for LSTM model
 def preprocess_image(image_path, num_frames=4):
@@ -509,6 +614,26 @@ def home():
     except:
         history = []
     return render_template("index.html", history=history)
+
+@app.route("/health")
+def health():
+    """Health check for Render and monitoring."""
+    model_ok = False
+    model_error = None
+    try:
+        if os.path.exists(FALLBACK_MODEL_PATH):
+            model_ok = True
+        elif os.path.exists(MODEL_PATH):
+            model_ok = True
+    except Exception as e:
+        model_error = str(e)
+    return jsonify({
+        "status": "ok",
+        "production": IS_PRODUCTION,
+        "model_file_present": model_ok,
+        "model_loaded": model is not None,
+        "model_error": model_error,
+    })
 
 @app.route("/api/predict", methods=["POST"])
 def api_predict():
@@ -549,7 +674,7 @@ def api_predict():
     
     if ADVANCED_FEATURES_AVAILABLE and result == "Pneumonia Detected":
         try:
-            vis_path, heatmap, detected_regions = create_visualization_with_explanations(
+            vis_path, heatmap, detected_regions, heatmap_path, detection_path = create_visualization_with_explanations(
                 temp_file_path, model, prediction, confidence
             )
             opacity_percentage = float(np.mean(heatmap > 0.5)) if heatmap is not None else float(prediction)
@@ -680,11 +805,13 @@ def predict():
         heatmap = None
         detected_regions = []
         visualization_url = None
+        heatmap_path = None
+        detection_path = None
         opacity_percentage = 0.0
         affected_area = 0
         
         try:
-            vis_path, heatmap, detected_regions = create_visualization_with_explanations(
+            vis_path, heatmap, detected_regions, heatmap_path, detection_path = create_visualization_with_explanations(
                 temp_file_path, model, prediction, confidence
             )
             print(f"Visualization created: {vis_path is not None}")
@@ -698,6 +825,8 @@ def predict():
             vis_path = temp_file_path
             detected_regions = []
             visualization_url = None
+            heatmap_path = None
+            detection_path = None
             opacity_percentage = 0.0
             affected_area = 0
         else:
@@ -764,21 +893,18 @@ def predict():
                 "pattern_recognition": pattern_recognition,
                 "analysis_date": analysis_date,
                 "image_path": temp_file_path,
-                "patient_info": json.dumps(patient_info),
-                "severity_score": str(severity_score) if severity_score else "N/A",
-                "severity_level": str(severity_level) if severity_level else "N/A",
-                "opacity_percentage": str(round(opacity_percentage * 100, 2)) if isinstance(opacity_percentage, float) else "0",
-                "affected_area": str(affected_area),
-                "detected_regions": json.dumps(detected_regions) if detected_regions else "[]",
-                "treatment_recommendations": json.dumps(treatment_recommendations) if treatment_recommendations else "[]",
-                "visualization_path": vis_path if vis_path != temp_file_path else ""
+                "patient_info": patient_info,
+                "severity_score": severity_score if severity_score is not None else "N/A",
+                "severity_level": severity_level if severity_level else "N/A",
+                "opacity_percentage": round(opacity_percentage * 100, 2) if isinstance(opacity_percentage, float) else 0,
+                "affected_area": affected_area,
+                "detected_regions": detected_regions or [],
+                "treatment_recommendations": treatment_recommendations or [],
+                "visualization_path": vis_path if vis_path != temp_file_path else "",
+                "heatmap_path": heatmap_path or "",
+                "detection_map_path": detection_path or "",
             }
-            
-            # Store the analysis data in temporary directory
-            os.makedirs(REPORTS_FOLDER, exist_ok=True)
-            with open(os.path.join(REPORTS_FOLDER, "latest_analysis.txt"), "w") as f:
-                for key, value in analysis_data.items():
-                    f.write(f"{key}:{value}\n")
+            save_analysis_data(analysis_data)
         except Exception as e:
             print(f"Warning: Could not save analysis data: {e}")
 
@@ -880,230 +1006,205 @@ def serve_report_file(filename):
 
 @app.route("/download_report")
 def download_report():
-    # Read the analysis data
-    analysis_data = {}
     try:
-        with open(os.path.join(REPORTS_FOLDER, "latest_analysis.txt"), "r") as f:
-            for line in f:
-                key, value = line.strip().split(":", 1)
-                if key == "patient_info":
-                    try:
-                        # Parse the JSON string back to a dictionary
-                        analysis_data[key] = json.loads(value)
-                    except json.JSONDecodeError:
-                        analysis_data[key] = {
-                            "name": "Not Available",
-                            "age": "Not Available",
-                            "gender": "Not Available",
-                            "medical_history": "Not Available"
-                        }
-                else:
-                    analysis_data[key] = value
+        analysis_data = load_analysis_data()
     except FileNotFoundError:
         return "No analysis data found. Please perform an analysis first.", 404
+    except Exception as e:
+        print(f"Error loading analysis data: {e}")
+        return "Could not load analysis data. Please run a new analysis and try again.", 500
 
-    # Generate PDF report
     class PDF(FPDF):
         def header(self):
             self.set_font("Arial", "B", 20)
             self.set_text_color(0, 0, 0)
-            self.cell(0, 20, "Pneumonia Detection Report", ln=True, align="C")
+            self.cell(0, 20, sanitize_pdf_text("Pneumonia Detection Report"), ln=True, align="C")
             self.line(10, 30, 200, 30)
             self.ln(10)
+
+    def pdf_section_title(title):
+        pdf.set_font("Arial", "B", 14)
+        pdf.cell(0, 10, sanitize_pdf_text(title), ln=True)
+        pdf.ln(3)
+
+    def pdf_row(label, value):
+        pdf.set_font("Arial", "B", 11)
+        pdf.cell(55, 8, sanitize_pdf_text(label + ":"), 0)
+        pdf.set_font("Arial", "", 11)
+        pdf.cell(0, 8, sanitize_pdf_text(value), ln=True)
+
+    def pdf_add_image(title, image_path, caption=None):
+        if not image_path or not os.path.exists(image_path):
+            return
+        if pdf.get_y() > 180:
+            pdf.add_page()
+        pdf.set_font("Arial", "B", 12)
+        pdf.cell(0, 8, sanitize_pdf_text(title), ln=True)
+        if caption:
+            pdf.set_font("Arial", "", 9)
+            pdf.cell(0, 5, sanitize_pdf_text(caption), ln=True)
+        try:
+            pdf.image(image_path, x=15, y=None, w=180)
+            pdf.ln(5)
+        except Exception as e:
+            print(f"Could not embed image {image_path}: {e}")
+            pdf.set_font("Arial", "I", 10)
+            pdf.cell(0, 8, sanitize_pdf_text("[Image could not be embedded]"), ln=True)
 
     pdf = PDF()
     pdf.add_page()
     pdf.set_auto_page_break(auto=True, margin=15)
 
-    # Add patient information
-    pdf.set_font("Arial", "B", 14)
-    pdf.cell(0, 10, "Patient Information", ln=True)
-    pdf.ln(5)
-    pdf.set_font("Arial", "", 12)
-    
     patient_info = analysis_data.get("patient_info", {})
-    details = [
-        ("Name", patient_info.get("name", "Not Available")),
-        ("Age", patient_info.get("age", "Not Available")),
-        ("Gender", patient_info.get("gender", "Not Available")),
-        ("Medical History", patient_info.get("medical_history", "Not Available"))
-    ]
-    
-    for label, value in details:
-        pdf.set_font("Arial", "B", 12)
-        pdf.cell(60, 10, label + ":", 0)
-        pdf.set_font("Arial", "", 12)
-        pdf.cell(0, 10, str(value), ln=True)
+    if isinstance(patient_info, str):
+        try:
+            patient_info = json.loads(patient_info)
+        except json.JSONDecodeError:
+            patient_info = {}
 
-    # Add analysis results
-    pdf.ln(5)
-    pdf.set_font("Arial", "B", 14)
-    pdf.cell(0, 10, "Analysis Results", ln=True)
-    pdf.ln(5)
-    pdf.set_font("Arial", "", 12)
-    details = [
-        ("Diagnosis", analysis_data.get("result", "N/A")),
-        ("Overall Confidence", f"{analysis_data.get('confidence', 'N/A')}%"),
-        ("Image Quality", f"{analysis_data.get('image_quality', 'N/A')}%"),
-        ("Feature Detection", f"{analysis_data.get('feature_detection', 'N/A')}%"),
-        ("Pattern Recognition", f"{analysis_data.get('pattern_recognition', 'N/A')}%"),
-        ("Analysis Date", analysis_data.get("analysis_date", "N/A"))
-    ]
+    pdf_section_title("Patient Information")
+    for label, key in [("Name", "name"), ("Age", "age"), ("Gender", "gender"), ("Medical History", "medical_history")]:
+        pdf_row(label, patient_info.get(key) or "Not Available")
+    pdf.ln(3)
 
-    for label, value in details:
-        pdf.set_font("Arial", "B", 12)
-        pdf.cell(60, 10, label + ":", 0)
-        pdf.set_font("Arial", "", 12)
-        pdf.cell(0, 10, str(value), ln=True)
+    pdf_section_title("Analysis Results")
+    pdf_row("Uploaded File", analysis_data.get("filename", "N/A"))
+    pdf_row("Diagnosis", analysis_data.get("result", "N/A"))
+    pdf_row("Overall Confidence", f"{analysis_data.get('confidence', 'N/A')}%")
+    pdf_row("Image Quality", f"{analysis_data.get('image_quality', 'N/A')}%")
+    pdf_row("Feature Detection", f"{analysis_data.get('feature_detection', 'N/A')}%")
+    pdf_row("Pattern Recognition", f"{analysis_data.get('pattern_recognition', 'N/A')}%")
+    pdf_row("Analysis Date", analysis_data.get("analysis_date", "N/A"))
+    pdf.ln(3)
 
-    # Add Severity Assessment
     severity_score = analysis_data.get("severity_score", "N/A")
     severity_level = analysis_data.get("severity_level", "N/A")
-    if severity_score != "N/A" and severity_level != "N/A":
-        pdf.ln(5)
-        pdf.set_font("Arial", "B", 14)
-        pdf.cell(0, 10, "Pneumonia Severity Assessment", ln=True)
-        pdf.ln(5)
-        pdf.set_font("Arial", "B", 12)
-        pdf.cell(0, 10, f"Severity Score: {severity_score}/100", ln=True)
-        pdf.set_font("Arial", "", 12)
-        pdf.cell(0, 10, f"Severity Level: {severity_level.title()}", ln=True)
+    if severity_score not in (None, "N/A") and severity_level not in (None, "N/A"):
+        pdf_section_title("Pneumonia Severity Assessment")
+        pdf_row("Severity Score", f"{severity_score}/100")
+        pdf_row("Severity Level", str(severity_level).title())
+        pdf_row("Opacity Percentage", f"{analysis_data.get('opacity_percentage', '0')}%")
+        pdf_row("Affected Area", f"{analysis_data.get('affected_area', '0')} pixels")
         pdf.ln(3)
-        
-        # Severity metrics
-        opacity_pct = analysis_data.get("opacity_percentage", "0")
-        affected_area = analysis_data.get("affected_area", "0")
-        pdf.set_font("Arial", "B", 11)
-        pdf.cell(0, 8, "Severity Metrics:", ln=True)
+
+    detected_regions = analysis_data.get("detected_regions", [])
+    if isinstance(detected_regions, str):
+        try:
+            detected_regions = json.loads(detected_regions)
+        except json.JSONDecodeError:
+            detected_regions = []
+
+    if detected_regions:
+        pdf_section_title("Detected Regions Analysis")
         pdf.set_font("Arial", "", 10)
-        pdf.cell(0, 6, f"  • Opacity Percentage: {opacity_pct}%", ln=True)
-        pdf.cell(0, 6, f"  • Affected Area: {affected_area} pixels", ln=True)
-        pdf.cell(0, 6, f"  • Detection Confidence: {analysis_data.get('confidence', 'N/A')}%", ln=True)
+        pdf.multi_cell(0, 6, sanitize_pdf_text(
+            "Areas identified by the AI model as significant for the diagnosis:"
+        ), align="L")
+        pdf.ln(2)
+        for i, region in enumerate(detected_regions[:8]):
+            pdf.set_font("Arial", "B", 10)
+            pdf.cell(0, 7, sanitize_pdf_text(
+                f"Region {region.get('id', i + 1)}: {region.get('location', 'Unknown')}"
+            ), ln=True)
+            pdf.set_font("Arial", "", 9)
+            pdf.cell(0, 5, sanitize_pdf_text(
+                f"  Intensity: {region.get('intensity', 0) * 100:.1f}% | Area: {region.get('area', 0)} px"
+            ), ln=True)
+            explanation = region.get("explanation", {})
+            if explanation:
+                pdf.multi_cell(0, 5, sanitize_pdf_text(f"  {explanation.get('text', '')}"), align="L")
+                if explanation.get("recommendation"):
+                    pdf.multi_cell(0, 5, sanitize_pdf_text(
+                        f"  Recommendation: {explanation.get('recommendation')}"
+                    ), align="L")
+            pdf.ln(1)
 
-    # Add Detected Regions Analysis
-    detected_regions_str = analysis_data.get("detected_regions", "[]")
-    try:
-        detected_regions = json.loads(detected_regions_str) if detected_regions_str else []
-        if detected_regions:
-            pdf.ln(5)
-            pdf.set_font("Arial", "B", 14)
-            pdf.cell(0, 10, "Detected Regions Analysis", ln=True)
-            pdf.ln(3)
-            pdf.set_font("Arial", "", 10)
-            pdf.multi_cell(0, 6, "The following areas were identified by the AI model as significant for the diagnosis:", align="L")
-            pdf.ln(3)
-            
-            for i, region in enumerate(detected_regions[:5]):  # Limit to 5 regions for PDF
-                pdf.set_font("Arial", "B", 11)
-                pdf.cell(0, 8, f"Region {region.get('id', i+1)}: {region.get('location', 'Unknown')}", ln=True)
-                pdf.set_font("Arial", "", 9)
-                pdf.cell(0, 5, f"  Detection Intensity: {region.get('intensity', 0)*100:.1f}%", ln=True)
-                pdf.cell(0, 5, f"  Area Size: {region.get('area', 0)} pixels", ln=True)
-                
-                explanation = region.get('explanation', {})
-                if explanation:
-                    pdf.set_font("Arial", "I", 9)
-                    pdf.multi_cell(0, 5, f"  Explanation: {explanation.get('text', 'N/A')}", align="L")
-                    pdf.ln(2)
-    except:
-        pass
+    treatment_recommendations = analysis_data.get("treatment_recommendations", [])
+    if isinstance(treatment_recommendations, str):
+        try:
+            treatment_recommendations = json.loads(treatment_recommendations)
+        except json.JSONDecodeError:
+            treatment_recommendations = []
 
-    # Add Treatment Recommendations
-    treatment_recs_str = analysis_data.get("treatment_recommendations", "[]")
-    try:
-        treatment_recommendations = json.loads(treatment_recs_str) if treatment_recs_str else []
-        if treatment_recommendations:
-            pdf.ln(5)
-            pdf.set_font("Arial", "B", 14)
-            pdf.cell(0, 10, "Treatment Recommendations", ln=True)
-            pdf.ln(3)
-            pdf.set_font("Arial", "", 10)
-            pdf.multi_cell(0, 6, "Based on the severity assessment and clinical guidelines, the following recommendations are suggested:", align="L")
-            pdf.ln(3)
-            
-            for rec in treatment_recommendations:
-                pdf.set_font("Arial", "B", 11)
-                pdf.cell(0, 8, f"{rec.get('type', 'Recommendation')} ({rec.get('priority', 'N/A')} Priority)", ln=True)
-                pdf.set_font("Arial", "", 9)
-                pdf.multi_cell(0, 5, rec.get('description', 'N/A'), align="L")
-                
-                if rec.get('actions'):
-                    pdf.set_font("Arial", "B", 9)
-                    pdf.cell(0, 6, "Recommended Actions:", ln=True)
-                    pdf.set_font("Arial", "", 8)
-                    for action in rec.get('actions', []):
-                        pdf.cell(10, 5, "", 0)  # Indent
-                        pdf.cell(0, 5, f"• {action}", ln=True)
-                
-                if rec.get('medications'):
-                    pdf.set_font("Arial", "B", 9)
-                    pdf.cell(0, 6, "Medications:", ln=True)
-                    pdf.set_font("Arial", "", 8)
-                    for med in rec.get('medications', []):
-                        pdf.cell(10, 5, "", 0)  # Indent
-                        pdf.cell(0, 5, f"• {med}", ln=True)
-                    if rec.get('duration'):
-                        pdf.cell(10, 5, "", 0)
-                        pdf.cell(0, 5, f"  Duration: {rec.get('duration')}", ln=True)
-                
-                if rec.get('note'):
-                    pdf.set_font("Arial", "I", 8)
-                    pdf.multi_cell(0, 5, f"Note: {rec.get('note')}", align="L")
-                
-                pdf.ln(2)
-    except Exception as e:
-        print(f"Error adding treatment recommendations to PDF: {e}")
+    if treatment_recommendations:
+        pdf_section_title("Treatment Recommendations")
+        for rec in treatment_recommendations:
+            pdf.set_font("Arial", "B", 10)
+            pdf.cell(0, 7, sanitize_pdf_text(
+                f"{rec.get('type', 'Recommendation')} ({rec.get('priority', 'N/A')} Priority)"
+            ), ln=True)
+            pdf.set_font("Arial", "", 9)
+            pdf.multi_cell(0, 5, sanitize_pdf_text(rec.get("description", "N/A")), align="L")
+            for action in rec.get("actions", []):
+                pdf.cell(0, 5, sanitize_pdf_text(f"  - {action}"), ln=True)
+            for med in rec.get("medications", []):
+                pdf.cell(0, 5, sanitize_pdf_text(f"  - {med}"), ln=True)
+            if rec.get("duration"):
+                pdf.cell(0, 5, sanitize_pdf_text(f"  Duration: {rec.get('duration')}"), ln=True)
+            if rec.get("note"):
+                pdf.set_font("Arial", "I", 9)
+                pdf.multi_cell(0, 5, sanitize_pdf_text(f"Note: {rec.get('note')}"), align="L")
+            pdf.ln(2)
 
-    # Add confidence explanation
-    pdf.ln(5)
+    pdf.ln(3)
     pdf.set_font("Arial", "B", 12)
-    pdf.cell(0, 10, "Confidence Score Analysis:", ln=True)
+    pdf.cell(0, 8, sanitize_pdf_text("Confidence Score Analysis"), ln=True)
     pdf.set_font("Arial", "", 10)
-    pdf.multi_cell(0, 6, "The confidence score is calculated based on multiple factors including model accuracy, image quality, feature detection, and pattern recognition. A confidence score above 80% indicates high reliability in the diagnosis.", align="L")
+    pdf.multi_cell(0, 6, sanitize_pdf_text(
+        "The confidence score reflects model certainty along with image quality, feature detection, "
+        "and pattern recognition. Scores above 80% indicate higher diagnostic reliability."
+    ), align="L")
 
-    # Add the analyzed image
-    image_path = analysis_data.get("image_path", "")
-    if image_path and os.path.exists(image_path):
-        pdf.ln(10)
-        pdf.set_font("Arial", "B", 12)
-        pdf.cell(0, 10, "Analyzed X-ray Image:", ln=True)
-        try:
-            pdf.image(image_path, x=50, y=None, w=110)
-        except:
-            pdf.cell(0, 10, "[Image could not be embedded]", ln=True)
-    
-    # Add visualization image if available
-    vis_path = analysis_data.get("visualization_path", "")
-    if vis_path and os.path.exists(vis_path) and vis_path != image_path:
-        pdf.ln(5)
-        pdf.set_font("Arial", "B", 12)
-        pdf.cell(0, 10, "Detection Visualization (Heat Map):", ln=True)
-        pdf.set_font("Arial", "", 9)
-        pdf.cell(0, 6, "Red areas indicate higher model attention", ln=True)
-        try:
-            pdf.image(vis_path, x=50, y=None, w=110)
-        except:
-            pdf.cell(0, 10, "[Visualization could not be embedded]", ln=True)
-    
-    # Add important disclaimer
-    pdf.ln(10)
+    pdf.add_page()
+    pdf_section_title("Imaging Analysis")
+    pdf_add_image(
+        "Original X-ray Image",
+        analysis_data.get("image_path", ""),
+        "Uploaded chest X-ray used for analysis."
+    )
+    pdf_add_image(
+        "AI Heat Map",
+        analysis_data.get("heatmap_path", ""),
+        "Color-coded attention map. Red/yellow = higher model attention."
+    )
+    pdf_add_image(
+        "Heat Map Overlay",
+        analysis_data.get("visualization_path", ""),
+        "Heat map overlaid on the original X-ray."
+    )
+    pdf_add_image(
+        "Detection Map",
+        analysis_data.get("detection_map_path", ""),
+        "Detected regions marked with bounding boxes."
+    )
+
+    pdf.ln(5)
     pdf.set_font("Arial", "B", 10)
     pdf.set_text_color(255, 0, 0)
-    pdf.cell(0, 8, "IMPORTANT DISCLAIMER:", ln=True)
+    pdf.cell(0, 8, sanitize_pdf_text("IMPORTANT DISCLAIMER"), ln=True)
     pdf.set_font("Arial", "", 9)
     pdf.set_text_color(0, 0, 0)
-    pdf.multi_cell(0, 5, "This report is generated by an AI-assisted diagnostic tool. All recommendations are suggestions and should be reviewed and validated by a qualified medical professional. This tool is for assistance only and should not replace professional medical judgment. Always consult with a healthcare provider for proper diagnosis and treatment.", align="L")
+    pdf.multi_cell(0, 5, sanitize_pdf_text(
+        "This report is generated by an AI-assisted diagnostic tool. All recommendations are suggestions "
+        "and must be reviewed by a qualified medical professional. This tool does not replace clinical judgment."
+    ), align="L")
 
-    # Save the PDF
-    pdf_path = os.path.join(REPORTS_FOLDER, "report.pdf")
-    pdf.output(pdf_path)
-
-    return send_file(
-        pdf_path,
-        mimetype="application/pdf",
-        as_attachment=True,
-        download_name=f"pneumonia_analysis_{analysis_data['analysis_date'].replace(' ', '_')}.pdf"
-    )
+    try:
+        os.makedirs(REPORTS_FOLDER, exist_ok=True)
+        pdf_path = os.path.join(REPORTS_FOLDER, "report.pdf")
+        pdf.output(pdf_path)
+        safe_date = str(analysis_data.get("analysis_date", "report")).replace(" ", "_").replace(":", "-")
+        return send_file(
+            pdf_path,
+            mimetype="application/pdf",
+            as_attachment=True,
+            download_name=f"pneumonia_analysis_{safe_date}.pdf"
+        )
+    except Exception as e:
+        print(f"Error generating PDF report: {e}")
+        import traceback
+        traceback.print_exc()
+        return "Failed to generate PDF report. Please try again after running a new analysis.", 500
 
 @app.route("/submit_feedback", methods=["POST"])
 def submit_feedback():
